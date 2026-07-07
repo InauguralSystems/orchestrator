@@ -126,9 +126,13 @@ Add this to ~/.claude/settings.json (merge into existing "hooks"):
   }
 }
 
-And add a daily sweep to crontab (crontab -e):
+And add these to crontab (crontab -e):
 
+  # daily health + standup sweep
   23 8 * * * ORCH_CONFIG=$cfg $PRODUCT/tools/daily_sweep.sh >> $(dirname "$cfg")/reports/sweep.log 2>&1
+
+  # weekly autonomous hiring round (Mondays 09:00) — keeps the roster current
+  0 9 * * 1 ORCH_CONFIG=$cfg ORCH_CLAUDE_FLAGS="--permission-mode acceptEdits" $PRODUCT/tools/hiring_round.sh >> $(dirname "$cfg")/reports/hiring.log 2>&1
 EOF
 }
 

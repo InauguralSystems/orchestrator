@@ -99,8 +99,12 @@ orchestrator hire            # or: orchestrator hire --dry-run  to see the promp
 ```
 
 If `claude` isn't installed, `hire` prints the round prompt to paste into a
-Claude Code session. Wire it into the daily sweep or a weekly cron to keep the
-roster current without asking.
+Claude Code session.
+
+To keep the roster current without asking, `orchestrator hook` prints a
+ready-made **weekly** cron line (Mondays 09:00) that runs `tools/hiring_round.sh`
+headless with the autonomy flag set. A round is expensive — a recruiter agent
+per repo — so it runs on its own weekly cadence, separate from the daily sweep.
 
 ## License
 

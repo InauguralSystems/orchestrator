@@ -42,4 +42,20 @@ t_sync_refuses_destructive_target() {  # F1: guard against skills_dir: . wiping 
   assert_file "committed skills survive the refused push" "$co/skills/keeper/SKILL.md"
 }
 
+t_sync_refuses_wrong_live_tree() {  # F2: guard against live_skills pointing at a DIFFERENT company's tree
+  local root; root="$(mktemp -d)"
+  local co; co="$(mkcompany "$root" "a:product")"
+  mkdir -p "$co/skills/triage" "$co/skills/security"      # this company's committed roster
+  echo s > "$co/skills/triage/SKILL.md"; echo s > "$co/skills/security/SKILL.md"
+  local live; live="$(_livedir "$co")"                    # live tree = a DIFFERENT company (disjoint names)
+  mkdir -p "$live/eigenscript-perf" "$live/write-eigenscript"
+  echo s > "$live/eigenscript-perf/SKILL.md"; echo s > "$live/write-eigenscript/SKILL.md"
+  assert_fail "push refuses when live tree shares no skills with the committed roster" \
+    bash -c "cd '$co' && '$ORCH_BIN' sync"
+  assert_file "committed triage survives the refused push"   "$co/skills/triage/SKILL.md"
+  assert_file "committed security survives the refused push" "$co/skills/security/SKILL.md"
+  assert_ok   "sync --force overrides the wrong-tree guard" \
+    bash -c "cd '$co' && '$ORCH_BIN' sync --force"
+}
+
 _livedir() { awk '/^live_skills:/{print $2}' "$1/orchestrator.yaml"; }

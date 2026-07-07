@@ -1,31 +1,42 @@
-# PORTFOLIO — what we own and why
+# PORTFOLIO — the coverage map
 
-The map of every repo, its role, and who staffs it. The machine-readable
-source of truth is the `repos:` list in `orchestrator.yaml`; this file is the
-human narrative around it.
+Owned by `portfolio-strategist`. Which areas of the company's work have a repo
+actively exercising them, how success in each is validated, and which areas
+nothing covers yet. Refreshed on every portfolio review (`orchestrator
+propose`). The machine-readable repo list is `repos:` in `orchestrator.yaml`;
+this file is the strategy layer over it.
 
 ## Categories
 
-| Category | Meaning | Scored? |
+| Category | Meaning | Scored by `health`? |
 |---|---|---|
 | product  | The thing everything else exists to build | yes |
-| consumer | An app/lib that exercises the product (a forcing function) | yes |
+| consumer | An app/lib that exercises the product | yes |
 | infra    | Distribution / CI / plumbing | yes |
 | sibling  | Deliberately coupled to a checkout; exempt from motion | partial |
 | parked   | Silence is healthy; reported, never scored | no |
 
-## Map
+## Covered areas
 
-<!-- ADAPT: one row per repo, matching orchestrator.yaml. -->
-| Repo | Category | What it is | Staffed by |
+<!-- ADAPT: one row per area of your product/company that a repo actively
+     stresses. "How success is validated" is the house contract's yardstick —
+     ideally something external, not self-declared. -->
+| Area under stress | Repo | How success is validated | Ledger |
 |---|---|---|---|
-| <product-repo> | product | the thing you sell/build | <core dept> |
-| <consumer-repo> | consumer | proves the product under real load | <applied eng> |
-| <infra-repo> | infra | CI / release / distribution | <release eng> |
-| <parked-repo> | parked | legacy, intentionally silent | unstaffed |
+| <core area> | <consumer-repo> | <external spec / benchmark / user outcome> | GAPS.md |
 
-## Coverage
+## Uncovered / candidate lanes
 
-What axes of the product are *not* yet exercised by a consumer? Gaps here are
-the portfolio strategist's backlog — a product feature with no forcing
-function tends to rot.
+<!-- This is where the strategist parks the next-repo candidates. Status:
+     UNCOVERED (open lane), PARTIAL (touched but not stressed), BLOCKED (waiting
+     on other work — record the blocker, don't propose around it). -->
+| Area | Status | Notes / candidate shape |
+|---|---|---|
+| <area nothing exercises> | UNCOVERED | candidate: <repo shape>, oracle: <external yardstick> |
+| <area waiting on other work> | BLOCKED | blocked on <milestone>; highest yield when unblocked |
+
+## Review log
+
+<!-- `orchestrator propose` appends a dated line each review: what was refreshed,
+     the ranked lanes, and the one proposal (or the zero-proposal verdict). -->
+- <date> — map seeded.

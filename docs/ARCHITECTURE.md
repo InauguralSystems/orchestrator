@@ -50,6 +50,7 @@ supporting a small flat schema: scalars (`company`, `ceo`, `github_org`,
 | Chief of Staff | the `triage` skill (routes every task) |
 | Ops Manager | the `workflow` skill (the per-change loop) |
 | HR / hiring | the `hiring-manager` skill + `orchestrator hire` |
+| Strategy / roadmap | the `portfolio-strategist` skill + `orchestrator propose` |
 | Performance review | `orchestrator health` |
 | "Nobody has to remember" | the daily-sweep cron + the sync hook |
 
@@ -67,6 +68,15 @@ trail); updating edits a charter in place. Whatever it touches, the PostToolUse
 sync hook mirrors and commits — so the decision engine and the bookkeeping stay
 decoupled: `hire` decides, the hook records. `ORCH_CLAUDE_FLAGS` (e.g.
 `--permission-mode acceptEdits`) controls how hands-off a round runs.
+
+The **strategy engine** is the same shape for *projects* that the hiring engine
+is for *people*: `orchestrator propose` launches the `portfolio-strategist`
+skill, which refreshes `PORTFOLIO.md`, ranks the uncovered lanes, drives the
+`deep-research` skill for prior art, and writes at most one next-repo proposal
+under a house contract (gap, external validation, ledger, smallest-first
+milestone). Zero proposals is a valid outcome. `hire` grows the roster;
+`propose` grows the portfolio; both hand their decision to the CEO and let the
+sync hook record whatever files they touch.
 
 ## Health signals
 

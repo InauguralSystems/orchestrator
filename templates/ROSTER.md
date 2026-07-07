@@ -13,6 +13,7 @@ CEO (<your name>)
     ├── Onboarding ........ company-setup (day-zero; dormant after)
     ├── Ops Manager ....... workflow (operating rhythm)
     ├── HR ................ hiring-manager (runs the hiring rounds)
+    ├── Strategy .......... portfolio-strategist (research + next-repo proposals)
     ├── Core dept
     │   └── Core Engineer . <your-core-engineer-skill>
     ├── Frontend dept

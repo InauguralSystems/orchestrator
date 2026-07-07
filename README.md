@@ -78,6 +78,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
 | `orchestrator standup [days]` | What moved across the company + open PRs |
 | `orchestrator sync [--install\|--check]` | Live skills ⇄ committed copy |
 | `orchestrator hire [--dry-run]` | Autonomous hiring round: hire/fire/update the roster |
+| `orchestrator propose [--dry-run]` | Research + propose the next repo (strategy) |
 | `orchestrator sweep` | The daily health + standup, committed |
 | `orchestrator doctor` | Check dependencies and config |
 | `orchestrator hook` | Print the PostToolUse hook + cron to wire up |
@@ -111,6 +112,25 @@ To keep the roster current without asking, `orchestrator hook` prints a
 ready-made **weekly** cron line (Mondays 09:00) that runs `tools/hiring_round.sh`
 headless with the autonomy flag set. A round is expensive — a recruiter agent
 per repo — so it runs on its own weekly cadence, separate from the daily sweep.
+
+## Strategy: proposing the next repo
+
+`orchestrator propose` is to *projects* what `hire` is to *people*. It launches
+the `portfolio-strategist` skill, which:
+
+1. **Refreshes `PORTFOLIO.md`** — the coverage map of what each repo exercises
+   vs. which areas nothing covers yet.
+2. **Ranks the uncovered lanes** by how much of the core they'd exercise,
+   whether a credible external yardstick exists, and what else they'd force.
+3. **Researches the top candidate** through the `deep-research` skill — prior
+   art, reference implementations, test corpora — delivered with citations.
+4. **Writes at most one proposal** under a house contract: the gap it fills,
+   how success is validated (externally, not self-graded), the findings ledger,
+   and a smallest-first milestone. **Zero proposals is a valid outcome** — it
+   won't manufacture a project to look busy.
+
+The proposal goes to you (the CEO) for the go/no-go; the builder executes it.
+Wire it to a monthly cron the same way as the hiring round.
 
 ## License
 

@@ -1,0 +1,4 @@
+# Orchestrator product repo — nothing runtime-specific belongs here.
+# A *company* repo (created by `orchestrator init`) has its own reports/.
+*.log
+.DS_Store

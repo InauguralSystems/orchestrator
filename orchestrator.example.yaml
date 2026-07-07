@@ -1,0 +1,41 @@
+# orchestrator.yaml — your company, as configuration.
+# Copy this to `orchestrator.yaml` in your company repo (or run
+# `orchestrator init`) and fill it in. Everything Orchestrator does is
+# driven from this file — there is no hardcoded org, path, or repo anywhere.
+
+# --- Identity -----------------------------------------------------------
+company: Acme                 # your company / portfolio name
+ceo: Jane Doe                 # the human who holds the vetoes (the only human)
+github_org: acme-inc          # GitHub org/owner for CI + backlog signals
+                              # (leave blank to derive from each repo's git remote)
+
+# --- Where your code lives ----------------------------------------------
+root: ~/src/acme              # parent dir that holds all the repos below
+                              # (siblings of your company repo)
+
+# --- The employee roster (AI skills) ------------------------------------
+live_skills: ~/.claude/skills # the LIVE skills tree Claude Code reads from
+skills_dir: skills            # where the committed copy lives inside THIS repo
+                              # (relative to the company repo)
+
+# --- The portfolio ------------------------------------------------------
+# One "- name:category" per repo. Categories drive how each is scored:
+#   product  — the thing everything else exists to build (0 or 1 of these)
+#   consumer — an app/lib that exercises the product (a forcing function)
+#   infra    — distribution / CI / plumbing
+#   sibling  — deliberately coupled to a checkout; exempt from some signals
+#   parked   — silence is healthy; reported but never scored
+repos:
+  - acme-core:product
+  - acme-web:consumer
+  - acme-cli:consumer
+  - acme-infra:infra
+  - old-prototype:parked
+
+# --- The constitution ---------------------------------------------------
+# Standing vetoes: settled decisions the Chief-of-Staff rejects work against.
+# These are surfaced verbatim in ROSTER.md and by the triage skill.
+vetoes:
+  - No feature ships without a test.
+  - Correctness before speed.
+  - No dependency added without an owner.

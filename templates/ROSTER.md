@@ -10,6 +10,7 @@ descriptions live in `roles/`. Hiring = writing a skill. Firing = deleting one.
 ```
 CEO (<your name>)
 └── Chief of Staff ......... triage
+    ├── Onboarding ........ company-setup (day-zero; dormant after)
     ├── Ops Manager ....... workflow (operating rhythm)
     ├── HR ................ hiring-manager (runs the hiring rounds)
     ├── Core dept

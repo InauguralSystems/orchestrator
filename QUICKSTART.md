@@ -32,13 +32,28 @@ orchestrator init
 This scaffolds:
 
 ```
-orchestrator.yaml          your company as config — edit this first
-roles/                     job charters (executive-ops + a specialist template)
+orchestrator.yaml          your company as config
+roles/                     job charters (executive-ops, hr, onboarding, + a template)
+skills/company-setup/      the onboarding agent (day-zero)
 skills/triage/             starter Chief-of-Staff skill
 skills/workflow/           starter operating-rhythm skill
+skills/hiring-manager/     the HR employee (runs hiring rounds)
 ROSTER.md METRICS.md PORTFOLIO.md   org docs
 reports/                   health history lands here
 ```
+
+## Fast path: let the onboarding agent do it
+
+```sh
+orchestrator sync --install   # make the starter skills live
+orchestrator setup            # the company-setup agent interviews you and
+                              # configures everything, end to end
+```
+
+The agent discovers your repos, asks only what it can't detect, writes the
+config, adapts the templates, wires the hooks, runs the first hiring round, and
+verifies the company comes up green. If you'd rather drive it yourself, the
+manual steps below do the same thing by hand.
 
 ## 3. Fill in the config
 

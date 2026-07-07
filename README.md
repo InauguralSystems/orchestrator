@@ -52,13 +52,18 @@ backlog signals.
 ## Quickstart
 
 ```sh
-cd ~/src/mycompany          # a repo that will BE your company layer
-orchestrator init           # scaffolds config + roster + org docs
-$EDITOR orchestrator.yaml   # your company, repos, and vetoes
-orchestrator doctor         # verify deps + config
-orchestrator hook           # print the auto-sync hook + cron to install
-orchestrator health --local # your first scorecard
+cd ~/src/mycompany            # a repo that will BE your company layer
+orchestrator init             # scaffolds config + roster + org docs
+orchestrator sync --install   # make the starter skills live
+orchestrator setup            # the onboarding agent configures everything:
+                              # interviews you, writes the config, adapts the
+                              # templates, wires the hooks, runs the first
+                              # hiring round, and verifies the company is green
 ```
+
+Prefer to do it by hand? `orchestrator init` then edit `orchestrator.yaml`,
+`orchestrator doctor`, `orchestrator hook`, `orchestrator hire`,
+`orchestrator health --local`.
 
 See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit.
@@ -68,6 +73,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
 | Command | What it does |
 |---|---|
 | `orchestrator init [dir]` | Scaffold a company repo (config, roles, skills, org docs) |
+| `orchestrator setup` | Onboarding agent: interviews you and configures the whole company |
 | `orchestrator health [--local]` | The scorecard: gates, hygiene, motion, backlog → GREEN/YELLOW/RED |
 | `orchestrator standup [days]` | What moved across the company + open PRs |
 | `orchestrator sync [--install\|--check]` | Live skills ⇄ committed copy |

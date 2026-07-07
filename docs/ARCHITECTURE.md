@@ -46,6 +46,7 @@ supporting a small flat schema: scalars (`company`, `ceo`, `github_org`,
 | Job description | a charter in `roles/` |
 | Org chart | `ROSTER.md` + the `repos:` config |
 | Constitution | `vetoes:` in `orchestrator.yaml` |
+| Onboarding | the `company-setup` skill + `orchestrator setup` (day zero) |
 | Chief of Staff | the `triage` skill (routes every task) |
 | Ops Manager | the `workflow` skill (the per-change loop) |
 | HR / hiring | the `hiring-manager` skill + `orchestrator hire` |

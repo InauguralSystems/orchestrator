@@ -2,6 +2,7 @@
 # orchestrator — run your company like code. One CLI over the whole system.
 #
 #   orchestrator init [dir]      scaffold a company repo (config + roster + tools)
+#   orchestrator setup           onboarding agent: configure the company for you
 #   orchestrator health [--local]  the scorecard (gates, hygiene, motion, backlog)
 #   orchestrator standup [days]  what moved across the company
 #   orchestrator sync [--install|--check]   live skills <-> committed copy
@@ -40,11 +41,17 @@ Scaffolded a company in $dir
   ROSTER.md METRICS.md PORTFOLIO.md   the org docs
   reports/            health history lands here
 
-Next:
+Next — let the onboarding agent do the rest for you:
+
+  cd $dir && orchestrator sync --install   # make the starter skills live
+  orchestrator setup                       # the agent configures everything
+
+Or set it up by hand:
   1. Edit $dir/orchestrator.yaml
-  2. cd $dir && orchestrator doctor
-  3. orchestrator hook   # wire up auto-sync (optional but recommended)
-  4. orchestrator health --local
+  2. orchestrator doctor
+  3. orchestrator hook   # wire up auto-sync + cron
+  4. orchestrator hire   # staff the company
+  5. orchestrator health --local
 EOF
 }
 
@@ -65,6 +72,36 @@ cmd_doctor() {
     echo "         repos=$(orch_repos | grep -c . )  vetoes=$(orch_vetoes | grep -c . )"
   else echo "  [MISS] no orchestrator.yaml (run 'orchestrator init')"; rc=1; fi
   return $rc
+}
+
+cmd_setup() {
+  . "$PRODUCT/lib/config.sh" || exit 1
+  local dry=0; [ "${1:-}" = "--dry-run" ] && dry=1
+  local prompt
+  prompt="Onboard a new company using the company-setup skill.
+
+The scaffold lives in $ORCH_HOME (config: $ORCH_CONFIG), currently holding
+placeholder values from 'orchestrator init'. Follow the company-setup method:
+discover repos under the likely root before asking, interview the founder for
+only the gaps in one focused pass, write orchestrator.yaml, replace every
+template placeholder in triage/workflow/ROSTER/PORTFOLIO, wire the sync hook +
+cron ('orchestrator hook'), run 'orchestrator sync --install', kick off the
+first hiring round ('orchestrator hire'), then verify 'orchestrator health
+--local' is GREEN and hand off. Propose sensible defaults; confirm before
+writing files."
+
+  if [ "$dry" = 1 ]; then printf '%s\n' "$prompt"; return 0; fi
+  if [ ! -d "$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")/company-setup" ]; then
+    echo "orchestrator: the company-setup skill isn't installed live." >&2
+    echo "  Run 'orchestrator sync --install' first, or add it to ~/.claude/skills/." >&2
+  fi
+  if command -v claude >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    exec claude ${ORCH_CLAUDE_FLAGS:-} -p "$prompt"
+  else
+    echo "orchestrator: 'claude' CLI not found. Paste this into a Claude Code session:" >&2
+    echo; printf '%s\n' "$prompt"
+  fi
 }
 
 cmd_hire() {
@@ -140,6 +177,7 @@ main() {
   local sub="${1:-help}"; shift || true
   case "$sub" in
     init)     cmd_init "$@";;
+    setup)    cmd_setup "$@";;
     health)   . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/health.sh" "$@";;
     standup)  . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/standup.sh" "$@";;
     sync)     . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/sync_skills.sh" "$@";;

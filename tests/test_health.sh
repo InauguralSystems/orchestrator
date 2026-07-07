@@ -25,3 +25,17 @@ t_health_parked_not_scored() {
   local out; out="$(runco "$co" health --local 2>&1)"
   assert_contains "parked repo not a WARN/FAIL" "$out" "parked"
 }
+
+t_health_warns_absent_ci() {  # G9: no CI configured must WARN, not read as green
+  local root; root="$(mktemp -d)"; mkrepo "$root" nocirepo
+  git -C "$root/nocirepo" remote add origin https://github.com/acme/nocirepo
+  local co; co="$(mkcompany "$root" "nocirepo:consumer")"
+  # fake gh on PATH: report zero workflow runs ("-") + an open count, no network.
+  local fakebin; fakebin="$(mktemp -d)"
+  { echo '#!/usr/bin/env bash'
+    echo 'case "$*" in *"run list"*) echo "-";; *"api"*) echo 3;; *) exit 0;; esac'
+  } > "$fakebin/gh"; chmod +x "$fakebin/gh"
+  local out; out="$(cd "$co" && PATH="$fakebin:$PATH" "$ORCH_BIN" health 2>&1)"
+  assert_contains "absent CI warns"          "$out" "no CI configured"
+  assert_contains "absent-CI repo is WARN"   "$out" "**WARN**"
+}

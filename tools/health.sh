@@ -75,6 +75,11 @@ while IFS= read -r entry; do
     ci="$(ci_of "$repo")"; open="$(open_of "$repo")"
     if [ "$ci" = "failure" ] && [ "$cat" != "parked" ]; then
       status="FAIL"; why="${why:+$why; }CI red"
+    elif [ "$ci" = "-" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
+      # No workflow runs at all: a load-bearing repo with no CI gate must not
+      # read the same as one with green CI. "-" (definitively no runs) warns;
+      # "?" (owner/gh undetermined) does not. Siblings are config-only, exempt.
+      status="WARN"; why="${why:+$why; }no CI configured"
     fi
   fi
 

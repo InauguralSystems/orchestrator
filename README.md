@@ -36,6 +36,10 @@ don't scale to twenty repos. Orchestrator makes the org legible:
   the committed roster stays in lockstep with the live one, mechanically.
 - **A daily sweep.** A cron job runs health + standup, commits the reports,
   and shouts on RED — the backlog gets checked even when nobody asks.
+- **Security, pre-hired.** Every company ships with a `security` employee — an
+  AppSec reviewer for secrets, injection, auth boundaries, SSRF, and
+  supply-chain risk — because the people who most need it are the ones who
+  forget to add it.
 
 ## Install
 
@@ -138,7 +142,7 @@ A self-contained regression suite ships in [`tests/`](tests/) — TAP output,
 **no dependency beyond what the product already needs** (no `bats` to install):
 
 ```sh
-bash tests/run.sh        # 63 checks across every subcommand; exit 0 iff green
+bash tests/run.sh        # 64 checks across every subcommand; exit 0 iff green
 ```
 
 It covers scaffolding, the config parser, health scoring + reports, the

@@ -16,7 +16,7 @@ t_init_scaffolds_files() {
 t_init_scaffolds_starter_skills() {
   local co; co="$(mkempty)"
   runco "$co" init >/dev/null 2>&1
-  for s in company-setup triage workflow hiring-manager portfolio-strategist; do
+  for s in company-setup triage workflow hiring-manager portfolio-strategist security; do
     assert_file "starter skill: $s" "$co/skills/$s/SKILL.md"
   done
 }

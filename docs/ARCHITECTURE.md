@@ -51,6 +51,7 @@ supporting a small flat schema: scalars (`company`, `ceo`, `github_org`,
 | Ops Manager | the `workflow` skill (the per-change loop) |
 | HR / hiring | the `hiring-manager` skill + `orchestrator hire` |
 | Strategy / roadmap | the `portfolio-strategist` skill + `orchestrator propose` |
+| Security (pre-hired) | the `security` skill — reviews any repo's attack surface |
 | Performance review | `orchestrator health` |
 | "Nobody has to remember" | the daily-sweep cron + the sync hook |
 

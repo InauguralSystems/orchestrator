@@ -38,6 +38,8 @@ skills/company-setup/      the onboarding agent (day-zero)
 skills/triage/             starter Chief-of-Staff skill
 skills/workflow/           starter operating-rhythm skill
 skills/hiring-manager/     the HR employee (runs hiring rounds)
+skills/portfolio-strategist/  research + next-repo proposals
+skills/security/           AppSec reviewer (ships pre-hired — security is easy to forget)
 ROSTER.md METRICS.md PORTFOLIO.md   org docs
 reports/                   health history lands here
 ```

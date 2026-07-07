@@ -14,14 +14,14 @@ CEO (<your name>)
     ├── Ops Manager ....... workflow (operating rhythm)
     ├── HR ................ hiring-manager (runs the hiring rounds)
     ├── Strategy .......... portfolio-strategist (research + next-repo proposals)
+    ├── Security dept
+    │   └── AppSec Eng .... security (ships pre-hired)
     ├── Core dept
     │   └── Core Engineer . <your-core-engineer-skill>
     ├── Frontend dept
     │   └── Frontend Eng .. <your-frontend-skill>
     ├── Platform dept
     │   └── Release Eng ... <your-release-skill>
-    ├── Security dept
-    │   └── AppSec Eng .... <your-security-skill>
     └── DX dept
         └── Docs/DX Eng ... <your-docs-skill>
 ```

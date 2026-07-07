@@ -16,7 +16,7 @@ the implementation.
 - Core: `<your-core-engineer-skill>`
 - Frontend: `<your-frontend-skill>`
 - Infra / Release: `<your-release-skill>`
-- Security: `<your-security-skill>`
+- Security: `security` (ships pre-hired)
 - Docs / DX: `<your-docs-skill>`
 
 ## Routing rules
@@ -25,7 +25,7 @@ the implementation.
 - Runtime / core internals → `<your-core-engineer-skill>`
 - UI, client, rendering → `<your-frontend-skill>`
 - CI, release, packaging, cross-platform builds → `<your-release-skill>`
-- Attack surface, auth, injection, supply chain → `<your-security-skill>`
+- Attack surface, auth, injection, secrets, supply chain → `security`
 - README, examples, onboarding → `<your-docs-skill>`
 
 ## Prioritization rules (settled — do not re-derive per task)

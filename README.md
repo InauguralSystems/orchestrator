@@ -27,9 +27,13 @@ don't scale to twenty repos. Orchestrator makes the org legible:
   and the GitHub API (never builds or mutates) and scores every repo on
   gates, hygiene, motion, and backlog. It writes a trend, not a snapshot, and
   exits non-zero on RED so it can gate your automation.
-- **A roster that can't drift.** A PostToolUse hook mirrors your live skills
-  into the repo and commits them the moment you edit one — the committed
-  employee roster stays in lockstep with the live one, mechanically.
+- **A roster that hires itself.** `orchestrator hire` runs an autonomous
+  hiring round: a recruiter agent per repo finds recurring work with no owner,
+  a committee dedups across them, each candidate is authored and adversarially
+  verified, skills whose work is gone are fired, and the round is logged — all
+  without you hand-writing a file. Zero-hire is the default; headcount is
+  attention-cost. A PostToolUse hook then mirrors and commits the result, so
+  the committed roster stays in lockstep with the live one, mechanically.
 - **A daily sweep.** A cron job runs health + standup, commits the reports,
   and shouts on RED — the backlog gets checked even when nobody asks.
 
@@ -67,9 +71,36 @@ See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
 | `orchestrator health [--local]` | The scorecard: gates, hygiene, motion, backlog → GREEN/YELLOW/RED |
 | `orchestrator standup [days]` | What moved across the company + open PRs |
 | `orchestrator sync [--install\|--check]` | Live skills ⇄ committed copy |
+| `orchestrator hire [--dry-run]` | Autonomous hiring round: hire/fire/update the roster |
 | `orchestrator sweep` | The daily health + standup, committed |
 | `orchestrator doctor` | Check dependencies and config |
 | `orchestrator hook` | Print the PostToolUse hook + cron to wire up |
+
+## Autonomous hiring
+
+The roster runs itself. `orchestrator hire` builds a round prompt from your
+config and hands it to the `hiring-manager` skill (your HR employee), which:
+
+1. **Recruits** — one subagent per active repo finds recurring work with no
+   current owner (default answer: zero-hire).
+2. **Committee** — dedups proposals across repos into candidate roles.
+3. **Authors + verifies** — drafts each `SKILL.md` and adversarially checks the
+   hire is worth the headcount; a scope note on an existing skill beats a new one.
+4. **Fires** — deletes skills whose work is gone (fully autonomous; git + the
+   ROSTER hiring log are the audit trail).
+5. **Logs** — records the round in `ROSTER.md` and reconciles the triage roster.
+
+It runs through your local `claude` CLI. For a hands-off round, export the
+autonomy flag first:
+
+```sh
+export ORCH_CLAUDE_FLAGS="--permission-mode acceptEdits"
+orchestrator hire            # or: orchestrator hire --dry-run  to see the prompt
+```
+
+If `claude` isn't installed, `hire` prints the round prompt to paste into a
+Claude Code session. Wire it into the daily sweep or a weekly cron to keep the
+roster current without asking.
 
 ## License
 

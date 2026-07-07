@@ -5,6 +5,7 @@
 #   orchestrator health [--local]  the scorecard (gates, hygiene, motion, backlog)
 #   orchestrator standup [days]  what moved across the company
 #   orchestrator sync [--install|--check]   live skills <-> committed copy
+#   orchestrator hire [--dry-run]  run an autonomous hiring round (HR)
 #   orchestrator sweep           the daily health+standup, committed
 #   orchestrator doctor          check dependencies and config
 #   orchestrator hook            print the PostToolUse hook JSON for settings.json
@@ -66,6 +67,45 @@ cmd_doctor() {
   return $rc
 }
 
+cmd_hire() {
+  . "$PRODUCT/lib/config.sh" || exit 1
+  local dry=0; [ "${1:-}" = "--dry-run" ] && dry=1
+  local company root skills_dir roster repos
+  company="$(orch_get company Company)"
+  root="$(orch_expand "$(orch_get root)")"
+  skills_dir="$ORCH_HOME/$(orch_get skills_dir skills)"
+  roster="$(ls "$skills_dir" 2>/dev/null | tr '\n' ' ')"
+  repos="$(orch_repos | sed 's/^/  - /')"
+  local prompt
+  prompt="Run a hiring round for the company \"$company\" using the hiring-manager skill.
+
+Portfolio (root: $root):
+$repos
+
+Current roster (committed skills in $skills_dir):
+  ${roster:-<none>}
+
+Follow the hiring-manager method exactly: one recruiter subagent per active
+repo, committee dedup across proposals, author + adversarially verify each
+candidate, fire skills whose work is gone (fully autonomous), update drifted
+charters, then record the round in $ORCH_HOME/ROSTER.md and reconcile the
+triage roster. Default verdict is zero-hire; headcount is attention-cost."
+
+  if [ "$dry" = 1 ]; then printf '%s\n' "$prompt"; return 0; fi
+  if [ ! -d "$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")/hiring-manager" ]; then
+    echo "orchestrator: the hiring-manager skill isn't installed live." >&2
+    echo "  Run 'orchestrator sync --install' first, or add it to ~/.claude/skills/." >&2
+  fi
+  if command -v claude >/dev/null 2>&1; then
+    # ORCH_CLAUDE_FLAGS lets you set e.g. --permission-mode acceptEdits for autonomy.
+    # shellcheck disable=SC2086
+    exec claude ${ORCH_CLAUDE_FLAGS:-} -p "$prompt"
+  else
+    echo "orchestrator: 'claude' CLI not found. Paste this into a Claude Code session:" >&2
+    echo; printf '%s\n' "$prompt"
+  fi
+}
+
 cmd_hook() {
   local esc="$PRODUCT/tools/hook_skill_sync.sh"
   local cfg="${ORCH_CONFIG:-$(pwd)/orchestrator.yaml}"
@@ -99,6 +139,7 @@ main() {
     health)   . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/health.sh" "$@";;
     standup)  . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/standup.sh" "$@";;
     sync)     . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/sync_skills.sh" "$@";;
+    hire)     cmd_hire "$@";;
     sweep)    . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/daily_sweep.sh" "$@";;
     doctor)   cmd_doctor;;
     hook)     cmd_hook;;

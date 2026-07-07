@@ -11,6 +11,7 @@ descriptions live in `roles/`. Hiring = writing a skill. Firing = deleting one.
 CEO (<your name>)
 └── Chief of Staff ......... triage
     ├── Ops Manager ....... workflow (operating rhythm)
+    ├── HR ................ hiring-manager (runs the hiring rounds)
     ├── Core dept
     │   └── Core Engineer . <your-core-engineer-skill>
     ├── Frontend dept
@@ -37,3 +38,15 @@ work that violates them. The source of truth is `orchestrator.yaml`:
 Some skills are not employees but shared training every employee follows —
 e.g. `workflow`. List yours here so it's clear which skills route work and
 which are company-wide method.
+
+## Hiring history
+
+`orchestrator hire` appends a dated entry here every round — repos surveyed,
+hires (with why), zero-hire verdicts (a zero is a decision worth recording),
+fires, and charter updates. This is the audit trail for an autonomous roster.
+
+<!-- Example shape (the hiring-manager fills these in):
+**2026-01-15 hiring round** (survey of N repos): 1 hire — <role> (owns <work>).
+Zero-hire verdicts: <repos> — existing charters already cover their work.
+Fires: <skill> (its repo was parked). -->
+

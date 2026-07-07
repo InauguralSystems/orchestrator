@@ -48,8 +48,24 @@ supporting a small flat schema: scalars (`company`, `ceo`, `github_org`,
 | Constitution | `vetoes:` in `orchestrator.yaml` |
 | Chief of Staff | the `triage` skill (routes every task) |
 | Ops Manager | the `workflow` skill (the per-change loop) |
+| HR / hiring | the `hiring-manager` skill + `orchestrator hire` |
 | Performance review | `orchestrator health` |
 | "Nobody has to remember" | the daily-sweep cron + the sync hook |
+
+## The hiring engine
+
+Deciding who to hire needs the model, so it is not a shell script — it is the
+`hiring-manager` skill, launched by `orchestrator hire`. The CLI is a thin
+launcher: it reads `repos:` and the current roster from config, builds a round
+prompt, and runs it through the local `claude` CLI (paste-the-prompt fallback
+if `claude` is absent). The skill does the multi-agent work — a recruiter
+subagent per repo (fan-out), a committee dedup (barrier), then author +
+adversarial verify per candidate. Hiring writes a new `SKILL.md`; firing
+deletes one (fully autonomous — git and the ROSTER hiring log are the audit
+trail); updating edits a charter in place. Whatever it touches, the PostToolUse
+sync hook mirrors and commits — so the decision engine and the bookkeeping stay
+decoupled: `hire` decides, the hook records. `ORCH_CLAUDE_FLAGS` (e.g.
+`--permission-mode acceptEdits`) controls how hands-off a round runs.
 
 ## Health signals
 

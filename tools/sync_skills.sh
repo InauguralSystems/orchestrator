@@ -17,6 +17,20 @@ MODE="${1:---push}"
 
 drift() { diff -rq "$LIVE" "$REPO" 2>&1 | grep -v '^Common' || true; }
 
+# safe_delete_target DST — a destructive (--delete) mirror is only allowed into a
+# skills dir strictly *inside* the company repo. This blocks a config typo
+# (skills_dir: . / .. / ~) from turning `sync --push` into an rm -rf of $HOME,
+# /, or the repo root. Returns 0 if DST is safe to --delete into.
+safe_delete_target() {
+  local dst home
+  mkdir -p "$1" 2>/dev/null || return 1
+  dst="$(cd "$1" 2>/dev/null && pwd -P)" || return 1
+  home="$(cd "$ORCH_HOME" 2>/dev/null && pwd -P)" || return 1
+  case "$dst" in ""|"/"|"$HOME") return 1;; esac
+  [ "$dst" = "$home" ] && return 1          # never the repo root itself
+  case "$dst/" in "$home"/*) return 0;; *) return 1;; esac  # must be under the repo
+}
+
 # mirror SRC DST [--delete] — copy SRC/* into DST. With --delete, DST becomes an
 # exact mirror of SRC (entries not in SRC are removed). Prefers rsync; falls
 # back to cp so rsync is optional, not required.
@@ -39,6 +53,11 @@ mirror() {
 
 case "$MODE" in
   --push)
+    if ! safe_delete_target "$REPO"; then
+      echo "sync: refusing destructive mirror into '$REPO' — skills_dir must be a" >&2
+      echo "      subdirectory inside the company repo ($ORCH_HOME), not . / .. / ~ / /." >&2
+      exit 1
+    fi
     mirror "$LIVE" "$REPO" --delete
     echo "Pushed live -> repo: $(ls "$REPO" 2>/dev/null | wc -l | tr -d ' ') skills. Review with 'git -C $ORCH_HOME diff', then commit."
     ;;

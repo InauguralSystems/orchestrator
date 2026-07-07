@@ -31,4 +31,15 @@ t_sync_install() {
   assert_file "install mirrors repo skill into live" "$(_livedir "$co")/gamma/SKILL.md"
 }
 
+t_sync_refuses_destructive_target() {  # F1: guard against skills_dir: . wiping the repo
+  local root; root="$(mktemp -d)"
+  local co; co="$(mkcompany "$root" "a:product")"
+  sed -i 's#^skills_dir: .*#skills_dir: .#' "$co/orchestrator.yaml"   # dangerous typo
+  local live; live="$(_livedir "$co")"; mkdir -p "$live/x"; echo s > "$live/x/SKILL.md"
+  mkdir -p "$co/skills/keeper"; echo k > "$co/skills/keeper/SKILL.md"   # would be rm -rf'd
+  assert_fail "push refuses when skills_dir points at the repo root" \
+    bash -c "cd '$co' && '$ORCH_BIN' sync"
+  assert_file "committed skills survive the refused push" "$co/skills/keeper/SKILL.md"
+}
+
 _livedir() { awk '/^live_skills:/{print $2}' "$1/orchestrator.yaml"; }

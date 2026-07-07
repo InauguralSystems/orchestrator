@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax (bash -n on every script)
+        run: |
+          set -e
+          for f in orchestrator lib/config.sh tools/*.sh tests/*.sh; do
+            echo "bash -n $f"; bash -n "$f"
+          done
+
+      - name: Regression suite
+        run: bash tests/run.sh
+
+      - name: shellcheck (advisory)
+        run: |
+          shellcheck --severity=error orchestrator lib/*.sh tools/*.sh || \
+            echo "::warning::shellcheck reported issues (advisory, non-blocking)"

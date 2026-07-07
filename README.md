@@ -146,8 +146,19 @@ bash tests/run.sh        # 64 checks across every subcommand; exit 0 iff green
 ```
 
 It covers scaffolding, the config parser, health scoring + reports, the
-live⇄repo sync with its firing (delete) semantics, the auto-commit hook, the
-agentic launchers, and `bash -n` on every script. See [tests/README.md](tests/README.md).
+live⇄repo sync with its firing (delete) semantics + the destructive-target
+guard, the auto-commit hook, the agentic launchers, and `bash -n` on every
+script. See [tests/README.md](tests/README.md). CI
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the suite +
+`bash -n` + advisory `shellcheck` on every push.
+
+## Security
+
+Every company ships with a `security` employee, and the product holds its own
+code to the same bar. Trust model, hardening notes, and disclosure policy are
+in [SECURITY.md](SECURITY.md). In short: run it against repos you own, keep the
+company repo private (the hook and sweep auto-push), and only run autonomous
+`hire`/`propose` rounds over trusted repos.
 
 ## License
 

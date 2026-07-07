@@ -19,4 +19,14 @@ t_config_lists() {
   assert_eq "orch_vetoes count" "$(_load "$co/orchestrator.yaml" 'orch_vetoes | grep -c .')" "1"
 }
 
+t_config_list_inline_comments() {
+  # A list entry may carry a trailing "# comment" just like scalars do; the
+  # parser must strip it so the category isn't corrupted (a comment can even
+  # contain a colon, which ${entry##*:} would otherwise read as the category).
+  local root; root="$(mkroot_dir)"
+  local co; co="$(mkcompany "$root" "a:product   # the core: scored as product" "b:parked")"
+  assert_eq "orch_repos strips inline comment" \
+    "$(_load "$co/orchestrator.yaml" 'orch_repos | head -1')" "a:product"
+}
+
 mkroot_dir() { mktemp -d; }

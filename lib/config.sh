@@ -49,7 +49,7 @@ _orch_list() {
   awk -v s="$1" '
     $0 ~ "^"s":[ \t]*$" { inb=1; next }
     inb && /^[A-Za-z0-9_]+:/ { inb=0 }
-    inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
+    inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+#.*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
   ' "$ORCH_CONFIG"
 }
 

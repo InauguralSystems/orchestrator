@@ -132,6 +132,19 @@ the `portfolio-strategist` skill, which:
 The proposal goes to you (the CEO) for the go/no-go; the builder executes it.
 Wire it to a monthly cron the same way as the hiring round.
 
+## Testing
+
+A self-contained regression suite ships in [`tests/`](tests/) — TAP output,
+**no dependency beyond what the product already needs** (no `bats` to install):
+
+```sh
+bash tests/run.sh        # 63 checks across every subcommand; exit 0 iff green
+```
+
+It covers scaffolding, the config parser, health scoring + reports, the
+live⇄repo sync with its firing (delete) semantics, the auto-commit hook, the
+agentic launchers, and `bash -n` on every script. See [tests/README.md](tests/README.md).
+
 ## License
 
 Proprietary. See [LICENSE](LICENSE). Not open source — this is a commercial

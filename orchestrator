@@ -11,6 +11,9 @@
 #   orchestrator work [--dry-run]  autonomous work session: report to the Chief of
 #                                  Staff, work the backlog, escalate to propose when
 #                                  dry, halt honestly when there's nothing real left
+#   orchestrator perf-gate [baseline|check]  the n=5 statistical gate for perf
+#                                  claims (record baseline, then check for a
+#                                  confirmed non-overlapping speedup)
 #   orchestrator sweep           the daily health+standup, committed
 #   orchestrator doctor          check dependencies and config
 #   orchestrator hook            print the PostToolUse hook JSON for settings.json
@@ -333,6 +336,7 @@ main() {
     propose)  cmd_propose "$@";;
     work)     cmd_work "$@";;
     sweep)    . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/daily_sweep.sh" "$@";;
+    perf-gate) exec bash "$PRODUCT/tools/perf_gate.sh" "$@";;
     doctor)   cmd_doctor;;
     hook)     cmd_hook;;
     version|-v|--version) cmd_version;;

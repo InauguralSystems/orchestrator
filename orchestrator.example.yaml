@@ -13,6 +13,12 @@ chief_of_staff: triage        # the router skill `orchestrator work` reports to
 gate: bash tests/run.sh       # the command the Stop-gate runs on a dirty tree;
                               # red -> the turn can't end. Empty/unset = no gate.
 protected_branches: main master  # deny-guard blocks force-push/delete of these
+
+# The n=5 statistical gate for PERFORMANCE claims (`orchestrator perf-gate`).
+# A build/test gate is binary; a perf claim is statistical — one-shots are noise.
+perf_gate: bash bench.sh      # a command that prints ONE metric number per run
+perf_n: 5                     # runs per measurement (default 5, min 3)
+perf_lower_is_better: true    # true for time/latency, false for throughput
 github_org: acme-inc          # GitHub org/owner for CI + backlog signals
                               # (leave blank to derive from each repo's git remote)
 

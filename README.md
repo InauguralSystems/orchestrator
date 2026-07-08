@@ -140,6 +140,28 @@ They are defense in depth, not a security boundary.
 run** unless `deny_guard` + `stop_gate` are installed — no unsupervised autonomy
 without the floor beneath it (`ORCH_UNSAFE=1` overrides, explicitly).
 
+## Verifying perf claims — the n=5 gate
+
+A build/test gate is **binary** (red or green) — the right check for *correctness*,
+and what the Stop-gate enforces. A **performance** claim is not binary: one run is
+noise. So the product has a second gate tier — `orchestrator perf-gate` — that
+makes "n=5 for any perf claim" mechanical instead of a rule you have to remember:
+
+```sh
+orchestrator perf-gate baseline   # run the bench n=5, record the baseline
+# ... make the change ...
+orchestrator perf-gate check      # run n=5; PASS only on a confirmed, non-overlapping speedup
+```
+
+It runs `perf_gate:` (a command that prints one metric number) N times, takes the
+median + full spread, and **rejects a "win" whose n=5 distribution overlaps the
+baseline's** — if the ranges overlap, the difference isn't real yet. It fails a
+regression and refuses a check with no baseline. `--no-regress` proves only
+absence of a regression (for perf-neutral changes). Theory is great; this is the
+reality check — the agent doesn't get to *believe* it's faster, it has to
+*measure* it, which is exactly the ground-truth verification that keeps an
+autonomous loop honest.
+
 ## Autonomous hiring
 
 The roster runs itself. `orchestrator hire` builds a round prompt from your

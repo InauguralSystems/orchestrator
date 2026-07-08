@@ -31,6 +31,34 @@ t_sync_install() {
   assert_file "install mirrors repo skill into live" "$(_livedir "$co")/gamma/SKILL.md"
 }
 
+t_sync_install_links_discovery() {  # a non-default live tree gets project-scoped discovery links
+  local root; root="$(mktemp -d)"
+  local co; co="$(mkcompany "$root" "a:product")"
+  mkdir -p "$co/skills/gamma"; echo s > "$co/skills/gamma/SKILL.md"
+  runco "$co" sync --install >/dev/null 2>&1
+  local link="$co/.claude/skills/gamma"
+  assert_file "install links skill for Skill-tool discovery" "$link"
+  assert_ok   "discovery link resolves to the live SKILL.md" \
+    bash -c "[ -L '$link' ] && [ -e '$link/SKILL.md' ]"
+  assert_eq   "discovery link points at the LIVE tree, not the mirror" \
+    "$(readlink "$link")" "$(_livedir "$co")/gamma"
+}
+
+t_sync_link_prunes_and_noops_on_default() {  # prunes a dead link; no bridge for a default-tree company
+  local root; root="$(mktemp -d)"
+  local co; co="$(mkcompany "$root" "a:product")"
+  mkdir -p "$co/skills/gamma"; echo s > "$co/skills/gamma/SKILL.md"
+  runco "$co" sync --install >/dev/null 2>&1
+  rm -rf "$(_livedir "$co")/gamma"                 # remove the skill from LIVE
+  runco "$co" sync --link >/dev/null 2>&1
+  assert_missing "dangling discovery link pruned" "$(ls "$co/.claude/skills" 2>/dev/null)" "gamma"
+  # A company whose live tree IS the auto-discovered ~/.claude/skills needs no bridge.
+  local co2; co2="$(mkcompany "$root" "a:product")"
+  sed -i "s#^live_skills: .*#live_skills: $HOME/.claude/skills#" "$co2/orchestrator.yaml"
+  runco "$co2" sync --link >/dev/null 2>&1
+  assert_missing "no discovery dir for a default-tree company" "$(ls -a "$co2")" ".claude"
+}
+
 t_sync_refuses_destructive_target() {  # F1: guard against skills_dir: . wiping the repo
   local root; root="$(mktemp -d)"
   local co; co="$(mkcompany "$root" "a:product")"

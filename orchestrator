@@ -5,7 +5,7 @@
 #   orchestrator setup           onboarding agent: configure the company for you
 #   orchestrator health [--local]  the scorecard (gates, hygiene, motion, backlog)
 #   orchestrator standup [days]  what moved across the company
-#   orchestrator sync [--install|--check]   live skills <-> committed copy
+#   orchestrator sync [--install|--check|--link]  live skills <-> committed copy (+ discovery links)
 #   orchestrator hire [--dry-run]  run an autonomous hiring round (HR)
 #   orchestrator propose [--dry-run]  research + propose the next repo (strategy)
 #   orchestrator work [--dry-run]  autonomous work session: report to the Chief of

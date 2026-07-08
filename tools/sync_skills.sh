@@ -4,8 +4,9 @@
 # committed copy exists so a fresh machine can bootstrap the company.
 #
 #   tools/sync_skills.sh            # push: live -> repo (default; then review + commit)
-#   tools/sync_skills.sh --install  # install: repo -> live (new machine)
+#   tools/sync_skills.sh --install  # install: repo -> live (new machine) + discovery links
 #   tools/sync_skills.sh --check    # report drift, exit 1 if any
+#   tools/sync_skills.sh --link     # (re)create Skill-tool discovery links only
 set -euo pipefail
 
 PRODUCT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,13 +14,16 @@ PRODUCT="$(cd "$(dirname "$0")/.." && pwd)"
 
 LIVE="$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")"
 REPO="$ORCH_HOME/$(orch_get skills_dir skills)"
+# The one skills tree Claude Code auto-discovers besides a project's
+# .claude/skills. A company whose live tree IS this needs no discovery bridge.
+DEFAULT_LIVE="$HOME/.claude/skills"
 
 # Parse args: MODE defaults to --push; --force overrides the wrong-tree guard.
 MODE=""; FORCE=0
 for a in "$@"; do
   case "$a" in
     --force)                 FORCE=1;;
-    --push|--install|--check) MODE="$a";;
+    --push|--install|--check|--link) MODE="$a";;
   esac
 done
 : "${MODE:=--push}"
@@ -69,6 +73,35 @@ mirror() {
   fi
 }
 
+# link_discovery — make a NON-default live tree invokable by Claude Code's Skill
+# tool. Claude Code auto-discovers only ~/.claude/skills and a project's
+# .claude/skills; a company that keeps its roster in a SEPARATE live tree (so two
+# companies' sync hooks can't clobber each other) is otherwise uninvokable.
+# Bridge it with project-scoped symlinks $ORCH_HOME/.claude/skills/<s> -> LIVE/<s>:
+#   - pointed at LIVE (the source of truth), never the committed mirror, which can
+#     go silently stale;
+#   - kept UNDER the company repo, never ~/.claude/skills — dropping them there
+#     would pull this roster into another company's `sync --push` --delete mirror.
+# No-op when LIVE already IS the auto-discovered personal tree. Dangling links (a
+# skill removed from LIVE) are pruned; real directories are never touched.
+link_discovery() {
+  local live_p def_p dst d s n=0
+  live_p="$(cd "$LIVE" 2>/dev/null && pwd -P)" || return 0   # no live tree yet
+  def_p="$(cd "$DEFAULT_LIVE" 2>/dev/null && pwd -P || printf '%s' "$DEFAULT_LIVE")"
+  if [ "$live_p" = "$def_p" ]; then return 0; fi             # already auto-discovered
+  dst="$ORCH_HOME/.claude/skills"; mkdir -p "$dst"
+  for d in "$dst"/*; do                                      # prune dead links only
+    if [ -L "$d" ] && [ ! -e "$d" ]; then rm -f "$d"; fi
+  done
+  for d in "$LIVE"/*/; do
+    if [ -d "$d" ]; then s="$(basename "$d")"; ln -sfn "$LIVE/$s" "$dst/$s"; n=$((n+1)); fi
+  done
+  if [ "$n" -gt 0 ]; then
+    echo "Linked $n skill(s) for Skill-tool discovery: $dst -> $LIVE (start a new session to load)."
+  fi
+  return 0
+}
+
 case "$MODE" in
   --push)
     if ! safe_delete_target "$REPO"; then
@@ -103,6 +136,10 @@ case "$MODE" in
     [ -d "$REPO" ] || { echo "No committed skills at $REPO" >&2; exit 1; }
     mirror "$REPO" "$LIVE"   # no --delete: never destroy machine-local skills
     echo "Installed repo -> live: $(ls "$REPO" 2>/dev/null | wc -l | tr -d ' ') skills into $LIVE (machine-local extras preserved)."
+    link_discovery          # make the freshly-installed roster invokable
+    ;;
+  --link)
+    link_discovery
     ;;
   --check)
     d="$(drift)"
@@ -110,5 +147,5 @@ case "$MODE" in
     echo "$d"; echo "DRIFT: $(echo "$d" | wc -l | tr -d ' ') differing entries. 'orchestrator sync' to push live -> repo."
     exit 1
     ;;
-  *) echo "usage: $0 [--push|--install|--check]" >&2; exit 2;;
+  *) echo "usage: $0 [--push|--install|--check|--link]" >&2; exit 2;;
 esac

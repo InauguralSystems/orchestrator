@@ -6,6 +6,8 @@
 # --- Identity -----------------------------------------------------------
 company: Acme                 # your company / portfolio name
 ceo: Jane Doe                 # the human who holds the vetoes (the only human)
+chief_of_staff: triage        # the router skill `orchestrator work` reports to
+                              # (optional; defaults to `triage`)
 github_org: acme-inc          # GitHub org/owner for CI + backlog signals
                               # (leave blank to derive from each repo's git remote)
 

@@ -8,6 +8,9 @@
 #   orchestrator sync [--install|--check]   live skills <-> committed copy
 #   orchestrator hire [--dry-run]  run an autonomous hiring round (HR)
 #   orchestrator propose [--dry-run]  research + propose the next repo (strategy)
+#   orchestrator work [--dry-run]  autonomous work session: report to the Chief of
+#                                  Staff, work the backlog, escalate to propose when
+#                                  dry, halt honestly when there's nothing real left
 #   orchestrator sweep           the daily health+standup, committed
 #   orchestrator doctor          check dependencies and config
 #   orchestrator hook            print the PostToolUse hook JSON for settings.json
@@ -182,6 +185,78 @@ CEO for the go/no-go."
   fi
 }
 
+cmd_work() {
+  . "$PRODUCT/lib/config.sh" || exit 1
+  local dry=0; [ "${1:-}" = "--dry-run" ] && dry=1
+  local company root skills_dir roster repos vetoes cos
+  company="$(orch_get company Company)"
+  root="$(orch_expand "$(orch_get root)")"
+  cos="$(orch_get chief_of_staff triage)"   # the Chief of Staff / router skill
+  skills_dir="$ORCH_HOME/$(orch_get skills_dir skills)"
+  roster="$(ls "$skills_dir" 2>/dev/null | tr '\n' ' ')"
+  repos="$(orch_repos | sed 's/^/  - /')"
+  vetoes="$(orch_vetoes | sed 's/^/  - /')"
+  local prompt
+  prompt="Autonomous work session for the company \"$company\". Report to the Chief
+of Staff — the '$cos' skill (the triage/router; the full roster is in ROSTER.md) —
+and work autonomously until told to stop or wrap.
+
+Company root: $root
+Portfolio:
+$repos
+Roster (live skills):
+  ${roster:-<none>}
+Standing vetoes — reject work that violates these, citing the veto:
+$vetoes
+
+THE LOOP — run until a human says stop/wrap, or until it is honestly dry:
+1. Report to the Chief of Staff ('$cos'). Have it route the next most valuable
+   piece of REAL work to exactly one owner skill, with the smallest useful next
+   action.
+2. Do the work through that owner and the 'workflow' operating rhythm. Every
+   change passes its gates (build/tests/sanitizers) AND adversarial review
+   before it lands. Trust the gate (reality: compile/run/test) over review
+   (opinion) — a change that fails a gate is reverted, not limped past.
+3. When the Chief of Staff has nothing real left to route, escalate to STRATEGY:
+   run the portfolio-strategist 'propose' method. Research prior art + the
+   coverage map, surface candidate gaps and new angles, and adversarially review
+   each with DIVERSE lenses (a made-up gap must not survive a skeptic; diverse
+   prompts decorrelate framing errors, the external gates catch the rest).
+   Verified real gaps become new work — route them and keep going.
+4. TERMINAL STATE — this is NOT a make-work machine. If 'propose' honestly finds
+   nothing real (zero proposals is a valid, expected outcome — do NOT manufacture
+   a project), then WRAP: summarize what was accomplished and state plainly there
+   is no real work left. Stop. Do not churn, refactor what was fine, or invent
+   gaps to stay busy.
+
+DECISIONS — research before escalating to the human:
+- For any decision, research the best approach first. If it is a HOW question —
+  determinable, reversible, internal, within the vetoes — decide it and proceed;
+  do not route it to the CEO.
+- Escalate to the CEO ONLY for WHETHER questions: direction, taste, risk
+  appetite, spend, or anything irreversible or outward-facing. Those stay the
+  CEO's even when research could answer them — they are the CEO's because they
+  are the CEO's, not because they are hard. Escalate pre-researched, with ONE
+  recommendation and the evidence, never a menu.
+
+Report honestly: failed gates with output, skipped steps named as skipped, and a
+clear summary when you wrap."
+
+  if [ "$dry" = 1 ]; then printf '%s\n' "$prompt"; return 0; fi
+  if [ ! -d "$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")/$cos" ]; then
+    echo "orchestrator: the Chief of Staff skill '$cos' isn't installed live." >&2
+    echo "  Run 'orchestrator sync --install', set 'chief_of_staff:' in orchestrator.yaml, or add it to your live skills." >&2
+  fi
+  if command -v claude >/dev/null 2>&1; then
+    # ORCH_CLAUDE_FLAGS should include --permission-mode acceptEdits for autonomy.
+    # shellcheck disable=SC2086
+    exec claude ${ORCH_CLAUDE_FLAGS:-} -p "$prompt"
+  else
+    echo "orchestrator: 'claude' CLI not found. Paste this into a Claude Code session:" >&2
+    echo; printf '%s\n' "$prompt"
+  fi
+}
+
 cmd_hook() {
   local esc="$PRODUCT/tools/hook_skill_sync.sh"
   local cfg="${ORCH_CONFIG:-$(pwd)/orchestrator.yaml}"
@@ -222,6 +297,7 @@ main() {
     sync)     . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/sync_skills.sh" "$@";;
     hire)     cmd_hire "$@";;
     propose)  cmd_propose "$@";;
+    work)     cmd_work "$@";;
     sweep)    . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/daily_sweep.sh" "$@";;
     doctor)   cmd_doctor;;
     hook)     cmd_hook;;

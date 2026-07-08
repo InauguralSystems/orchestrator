@@ -83,9 +83,38 @@ See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
 | `orchestrator sync [--install\|--check]` | Live skills ⇄ committed copy |
 | `orchestrator hire [--dry-run]` | Autonomous hiring round: hire/fire/update the roster |
 | `orchestrator propose [--dry-run]` | Research + propose the next repo (strategy) |
+| `orchestrator work [--dry-run]` | **The on-button.** Start an autonomous work session: report to the Chief of Staff, work the backlog, escalate to `propose` when it's dry, halt honestly when there's nothing real left |
 | `orchestrator sweep` | The daily health + standup, committed |
 | `orchestrator doctor` | Check dependencies and config |
 | `orchestrator hook` | Print the PostToolUse hook + cron to wire up |
+
+## The work loop (the on-button)
+
+`orchestrator work` is the front door to the whole system. One command builds a
+kickoff from your config and hands it to Claude: *report to the Chief of Staff,
+work autonomously until told to stop or wrap.* It runs on **your** Claude Code
+account (it `exec`s the `claude` CLI — no API keys, nothing hosted), local, with
+your gates enforcing every change.
+
+The loop is designed to keep going **only while there's real value**, and to stop
+honestly when there isn't:
+
+```
+report to the Chief of Staff → route work → owner does it (gates + adversarial review)
+  ↳ backlog dry?  → propose: research, surface gaps, adversarially review them
+        ↳ real gap?      → route it, keep going
+        ↳ genuinely dry? → WRAP: report what was done, stop (never manufacture work)
+  hits a decision? → research the best approach first
+        ↳ how / reversible / within vetoes?              → decide, proceed
+        ↳ whether / irreversible / outward-facing / spend? → escalate, pre-researched, one rec
+```
+
+Two properties make it trustworthy rather than a runaway: it **halts honestly**
+(zero-proposals is a valid outcome — it won't invent work to stay busy), and it
+**escalates only what's irreducibly the CEO's** (research resolves *how*
+questions; *whether* questions still come to you). For a hands-off session,
+`export ORCH_CLAUDE_FLAGS="--permission-mode acceptEdits"` first. `--dry-run`
+prints the exact prompt without running it.
 
 ## Autonomous hiring
 

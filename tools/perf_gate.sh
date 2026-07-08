@@ -48,6 +48,16 @@ case "$mode" in
     exit 0 ;;
   check)
     [ -f "$BASE" ] || { echo "perf_gate: no baseline — run 'perf-gate baseline' BEFORE the change." >&2; exit 1; }
+    # Coupling: a faster WRONG answer is not a speedup. If a correctness gate
+    # ('gate:') is configured, it must be green before a perf win can be claimed —
+    # a "faster" number off broken code is often faster BECAUSE it skips the work.
+    CGATE="$(orch_get gate 2>/dev/null || true)"
+    if [ -n "${CGATE:-}" ] && [ "${PERF_SKIP_CORRECTNESS:-0}" != "1" ]; then
+      if ! eval "$CGATE" >/dev/null 2>&1; then
+        echo "perf_gate: FAIL — the correctness gate is red. A faster wrong answer is not a speedup; fix correctness before claiming a perf win. (skip: PERF_SKIP_CORRECTNESS=1)" >&2
+        exit 1
+      fi
+    fi
     cur="$(samples)" || exit 1
     curf="$(mktemp)"; printf '%s\n' "$cur" > "$curf"
     awk -v lower="$LOWER" -v norg="$opt" '

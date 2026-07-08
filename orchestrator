@@ -254,6 +254,33 @@ DECISIONS — research before escalating to the human:
   are the CEO's, not because they are hard. Escalate pre-researched, with ONE
   recommendation and the evidence, never a menu.
 
+WHEN A FIX KEEPS FAILING — reframe, don't tunnel. After repeated failed attempts
+on the same break, STOP patching; more variations in the same frame won't help.
+REFRAME: ask 'why did it fail?' — the diagnostic question moves you to where the
+root cause is reachable that the fix-loop was tunneling past. Match the reframe to
+the failure: for a nondeterministic / memory / timing bug (a heisenbug), reason
+about it GEOMETRICALLY — its cause is spatial (layout, boundaries, timing
+windows), not logical, so procedural tracing looks in the wrong place. Fix from
+the confirmed root cause, or escalate the root cause. Trust the gate over your own
+review — a model misses its own errors, so verify against reality, not belief.
+
+WHEN YOU FIX A BREAK — capture the WHY, and prove it. The value of a fix is the
+ROOT CAUSE (why it failed at first), not the patch. Capture it and prove it with a
+regression test that FAILS without the fix and PASSES with it — that one act
+proves the cause is real, prevents recurrence, and turns a note into a mechanical
+check. Promote a load-bearing gotcha up the ladder: skill note -> regression test
+-> guard/hook. Never capture a plausible-but-unproven 'why'.
+
+CONTINUITY. You work in bounded sessions; treat context as curated, not infinite.
+Keep an explicit progress/state note and use git history as the source of truth,
+so a later session (or you, after compaction) can resume without re-deriving —
+record what's done, what's in flight, and the open threads.
+
+BOUNDS. There may be a hard wall-clock bound on this session; do not treat it as
+the place to stop. Wrap HONESTLY well before it: land or revert cleanly, update
+the progress note, and report. A bound reached mid-change is a pacing failure, not
+a stopping point.
+
 Report honestly: failed gates with output, skipped steps named as skipped, and a
 clear summary when you wrap."
 
@@ -269,8 +296,16 @@ clear summary when you wrap."
     echo "orchestrator: the Chief of Staff skill '$cos' isn't installed live." >&2
     echo "  Run 'orchestrator sync --install', set 'chief_of_staff:' in orchestrator.yaml, or add it to your live skills." >&2
   fi
+  local wt; wt="$(orch_get work_timeout 2>/dev/null || true)"
   if command -v claude >/dev/null 2>&1; then
     # ORCH_CLAUDE_FLAGS should include --permission-mode acceptEdits for autonomy.
+    # work_timeout (a timeout(1) duration, e.g. 3600 or 1h) is the DETERMINISTIC
+    # wall-clock bound beneath the model-judged honest-halt — so the loop cannot
+    # run away even if the model never decides to stop.
+    if [ -n "${wt:-}" ] && command -v timeout >/dev/null 2>&1; then
+      # shellcheck disable=SC2086
+      exec timeout "$wt" claude ${ORCH_CLAUDE_FLAGS:-} -p "$prompt"
+    fi
     # shellcheck disable=SC2086
     exec claude ${ORCH_CLAUDE_FLAGS:-} -p "$prompt"
   else

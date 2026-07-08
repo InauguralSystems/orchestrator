@@ -37,6 +37,18 @@ t_work_escalates_only_the_irreducible() {  # research collapses HOW, not WHETHER
   assert_contains "escalates one rec, never a menu"    "$out" "never a menu"
 }
 
+t_work_carries_the_reframe_and_capture_discipline() {  # the loop's smarter behaviors
+  local root; root="$(mktemp -d)"; mkrepo "$root" acme
+  local co; co="$(mkcompany "$root" "acme:product")"
+  local out; out="$(runco "$co" work --dry-run 2>&1)"
+  assert_contains "reframes instead of tunneling on a stuck fix" "$out" "REFRAME"
+  assert_contains "carries the geometric reframe for heisenbugs"  "$out" "GEOMETRICALLY"
+  assert_contains "captures the root-cause WHY, not the patch"    "$out" "ROOT CAUSE"
+  assert_contains "proves the why with a failing-then-passing test" "$out" "FAILS without the fix"
+  assert_contains "keeps external-memory continuity"              "$out" "CONTINUITY"
+  assert_contains "wraps honestly before the hard bound"          "$out" "BOUNDS"
+}
+
 t_work_honors_a_custom_chief_of_staff() {  # generic: the router name is configurable
   local root; root="$(mktemp -d)"; mkrepo "$root" acme
   local co; co="$(mkcompany "$root" "acme:product")"

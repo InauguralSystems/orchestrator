@@ -64,6 +64,27 @@ t_perfgate_check_requires_a_baseline() {
   assert_contains "tells you to record a baseline first" "$out" "baseline"
 }
 
+t_perfgate_coupling_red_correctness_blocks_a_speedup() {  # faster wrong answer != speedup
+  local root; root="$(mktemp -d)"; mkrepo "$root" acme
+  local co; co="$(_perfco "$root")"
+  printf 'gate: false\n' >> "$co/orchestrator.yaml"     # correctness gate is RED
+  echo 100 > "$root/metric"; ( cd "$co" && _pg baseline >/dev/null 2>&1 )
+  echo 90  > "$root/metric"                              # a genuine, big speedup...
+  local out rc=0; out="$( cd "$co" && _pg check 2>&1 )" || rc=$?
+  assert_ok "a speedup on a red correctness gate is rejected" bash -c "[ $rc -ne 0 ]"
+  assert_contains "explains: faster wrong answer isn't a speedup" "$out" "wrong answer"
+}
+
+t_perfgate_coupling_green_correctness_allows_a_speedup() {
+  local root; root="$(mktemp -d)"; mkrepo "$root" acme
+  local co; co="$(_perfco "$root")"
+  printf 'gate: true\n' >> "$co/orchestrator.yaml"      # correctness gate is GREEN
+  echo 100 > "$root/metric"; ( cd "$co" && _pg baseline >/dev/null 2>&1 )
+  echo 90  > "$root/metric"
+  local rc=0; ( cd "$co" && _pg check >/dev/null 2>&1 ) || rc=$?
+  assert_ok "a speedup with a green correctness gate passes" bash -c "[ $rc -eq 0 ]"
+}
+
 t_perfgate_is_noop_without_config() {
   local root; root="$(mktemp -d)"; mkrepo "$root" acme
   local co; co="$(mkcompany "$root" "acme:product")"   # no perf_gate: key

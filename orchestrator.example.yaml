@@ -8,6 +8,9 @@ company: Acme                 # your company / portfolio name
 ceo: Jane Doe                 # the human who holds the vetoes (the only human)
 chief_of_staff: triage        # the router skill `orchestrator work` reports to
                               # (optional; defaults to `triage`)
+work_timeout: 3600            # deterministic wall-clock bound (a timeout(1)
+                              # duration) under the work loop's honest-halt, so it
+                              # can't run away. Optional; unset = no hard bound.
 
 # --- Safe autonomy (the guardrail pack — see `orchestrator hook`) --------
 gate: bash tests/run.sh       # the command the Stop-gate runs on a dirty tree;

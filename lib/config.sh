@@ -60,3 +60,20 @@ _orch_list() {
 
 orch_repos()  { _orch_list repos; }   # each line: name:category
 orch_vetoes() { _orch_list vetoes; }
+
+# orch_ghslug NAME — the GitHub "owner/repo" slug for a portfolio repo, derived
+# from its local checkout's origin remote so a directory name that differs from
+# the GitHub repo name resolves correctly (e.g. dir "dot-github" -> repo
+# ".github", which "$github_org/NAME" would silently 404 on). Falls back to
+# "$github_org/NAME", then bare "NAME", when there is no usable remote.
+orch_ghslug() {
+  local name="$1" root url slug
+  root="$(orch_expand "$(orch_get root)")"
+  url="$(git -C "$root/$name" remote get-url origin 2>/dev/null)"
+  if [ -n "$url" ]; then
+    slug="$(printf '%s' "$url" | sed -E 's#\.git$##; s#^.*[:/]([^:/]+/[^:/]+)$#\1#')"
+    case "$slug" in */*) printf '%s\n' "$slug"; return;; esac
+  fi
+  local org; org="$(orch_get github_org)"
+  [ -n "$org" ] && printf '%s\n' "$org/$name" || printf '%s\n' "$name"
+}

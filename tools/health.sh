@@ -20,22 +20,19 @@ mkdir -p "$ORCH_HOME/reports"
 REPORT="$ORCH_HOME/reports/latest.md"
 HISTORY="$ORCH_HOME/reports/history.csv"
 
-# Resolve the GitHub owner for a repo: explicit github_org, else the remote.
-gh_owner() {
-  if [ -n "$ORG" ]; then printf '%s\n' "$ORG"; return; fi
-  git -C "$ROOT/$1" remote get-url origin 2>/dev/null \
-    | sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#' | head -1
-}
+# Resolve the GitHub "owner/repo" slug for a repo — remote-derived, so a dir
+# name that differs from the GitHub repo name (dot-github -> .github) resolves
+# instead of silently mis-looking-up. (orch_ghslug lives in lib/config.sh.)
 ci_of() { # latest workflow-run conclusion, or "-"
-  local o; o="$(gh_owner "$1")"; [ -n "$o" ] || { echo "?"; return; }
-  gh run list -R "$o/$1" -L 1 --json conclusion \
+  local slug; slug="$(orch_ghslug "$1")"; case "$slug" in */*) ;; *) echo "?"; return;; esac
+  gh run list -R "$slug" -L 1 --json conclusion \
     --jq 'if length==0 then "-" else (.[0].conclusion // "running") end' 2>/dev/null || echo "?"
 }
 # repo_meta REPO — echo "OPEN PRIVATE": open issues+PRs and the private flag
-# (true/false), from one API call. "? ?" when the owner or gh is unavailable.
+# (true/false), from one API call. "? ?" when the slug or gh is unavailable.
 repo_meta() {
-  local o; o="$(gh_owner "$1")"; [ -n "$o" ] || { echo "? ?"; return; }
-  gh api "repos/$o/$1" --jq '"\(.open_issues_count) \(.private)"' 2>/dev/null || echo "? ?"
+  local slug; slug="$(orch_ghslug "$1")"; case "$slug" in */*) ;; *) echo "? ?"; return;; esac
+  gh api "repos/$slug" --jq '"\(.open_issues_count) \(.private)"' 2>/dev/null || echo "? ?"
 }
 
 # standards_of DIR — the community-standards presence checklist. Echoes

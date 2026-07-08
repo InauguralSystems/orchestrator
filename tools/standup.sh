@@ -36,10 +36,23 @@ if [ "$LOCAL_ONLY" -eq 0 ] && command -v gh >/dev/null 2>&1 && [ -n "$ORG" ]; th
   found=0
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
-    repo="${entry%%:*}"
-    prs="$(gh pr list -R "$ORG/$repo" --json number,title,author \
+    repo="${entry%%:*}"; cat="${entry##*:}"
+    # A subsidiary is a child company with its OWN portfolio and standup; this
+    # layer does not enumerate its repos (mirrors the health roll-up). Surface
+    # it explicitly so an empty parent list is not mistaken for "clean across
+    # the whole company" — the subsidiary's own standup lists its PRs.
+    if [ "$cat" = "subsidiary" ]; then
+      echo "### $repo (subsidiary)"
+      echo "  - _PRs tracked by its own standup (run it in $repo/); not rolled up here._"
+      found=1
+      continue
+    fi
+    # Derive the real GitHub slug from the remote so a dir name != repo name
+    # (e.g. dot-github -> .github) does not silently 404 into an empty list.
+    slug="$(orch_ghslug "$repo")"
+    prs="$(gh pr list -R "$slug" --json number,title,author \
       --jq '.[] | "  - #\(.number) \(.title) (@\(.author.login))"' 2>/dev/null)"
     [ -n "$prs" ] && { echo "### $repo"; echo "$prs"; found=1; }
   done <<< "$(orch_repos)"
-  [ "$found" -eq 0 ] && echo "_No open PRs._"
+  [ "$found" -eq 0 ] && echo "_No open PRs in this layer's repos._"
 fi

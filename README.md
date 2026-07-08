@@ -116,6 +116,30 @@ questions; *whether* questions still come to you). For a hands-off session,
 `export ORCH_CLAUDE_FLAGS="--permission-mode acceptEdits"` first. `--dry-run`
 prints the exact prompt without running it.
 
+## Safe autonomy (the guardrail pack)
+
+The loop above only runs unattended because of the layer beneath it: **hooks —
+deterministic code the model cannot talk past.** Guidelines live in prompts and
+are advisory; guardrails live in hooks and are enforced. `orchestrator hook`
+installs three:
+
+| Hook | Event | What it mechanically enforces |
+|---|---|---|
+| `deny_guard.sh` | PreToolUse[Bash] | Denies the irreversible: force-push/delete of a `protected_branches`, `rm -r` of a home/root path. Low false-positive (feature-branch force-push, subpath `rm`, and normal push are allowed; heredocs are exempt). |
+| `stop_gate.sh` | Stop | A turn can't end with a red `gate:` on a dirty tree — the loop keeps fixing instead of stopping on red. Clean tree = instant no-op. |
+| `hook_skill_sync.sh` | PostToolUse[Write] | The committed roster stays == the live one. |
+
+The design rule: **what must hold goes in a hook, not a prompt.** Each guard is
+minimal and incident-shaped (guardrails cost false positives — add one when
+something actually went wrong), has an escape hatch (`stop_gate` consumes its
+skip flag per-stop so you can't leave it off), and lives outside the loop's reach
+(the deny-guard exempts content-writing so it can't be patched-past via Bash).
+They are defense in depth, not a security boundary.
+
+**The interlock:** `orchestrator work --permission-mode acceptEdits` **refuses to
+run** unless `deny_guard` + `stop_gate` are installed — no unsupervised autonomy
+without the floor beneath it (`ORCH_UNSAFE=1` overrides, explicitly).
+
 ## Autonomous hiring
 
 The roster runs itself. `orchestrator hire` builds a round prompt from your

@@ -185,6 +185,18 @@ CEO for the go/no-go."
   fi
 }
 
+# _guardrails_installed — true iff the deny-guard AND stop-gate hooks are wired
+# into a settings.json the running session would load. The interlock that keeps
+# 'work --permission-mode acceptEdits' from running unsupervised without a floor.
+_guardrails_installed() {
+  local s
+  for s in "$HOME/.claude/settings.json" "$ORCH_HOME/.claude/settings.json"; do
+    [ -f "$s" ] || continue
+    grep -q 'deny_guard.sh' "$s" 2>/dev/null && grep -q 'stop_gate.sh' "$s" 2>/dev/null && return 0
+  done
+  return 1
+}
+
 cmd_work() {
   . "$PRODUCT/lib/config.sh" || exit 1
   local dry=0; [ "${1:-}" = "--dry-run" ] && dry=1
@@ -243,6 +255,13 @@ Report honestly: failed gates with output, skipped steps named as skipped, and a
 clear summary when you wrap."
 
   if [ "$dry" = 1 ]; then printf '%s\n' "$prompt"; return 0; fi
+  # Interlock: no unsupervised autonomy without the guardrail pack beneath it.
+  case "${ORCH_CLAUDE_FLAGS:-}" in
+    *acceptEdits*|*dangerously-skip-permissions*)
+      if [ "${ORCH_UNSAFE:-0}" != "1" ] && ! _guardrails_installed; then
+        die "refusing autonomous acceptEdits without the guardrail pack (deny_guard + stop_gate). Run 'orchestrator hook' and install them, or set ORCH_UNSAFE=1 to override."
+      fi ;;
+  esac
   if [ ! -d "$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")/$cos" ]; then
     echo "orchestrator: the Chief of Staff skill '$cos' isn't installed live." >&2
     echo "  Run 'orchestrator sync --install', set 'chief_of_staff:' in orchestrator.yaml, or add it to your live skills." >&2
@@ -258,24 +277,39 @@ clear summary when you wrap."
 }
 
 cmd_hook() {
-  local esc="$PRODUCT/tools/hook_skill_sync.sh"
+  local deny="$PRODUCT/tools/deny_guard.sh"
+  local gate="$PRODUCT/tools/stop_gate.sh"
+  local sync="$PRODUCT/tools/hook_skill_sync.sh"
   local cfg="${ORCH_CONFIG:-$(pwd)/orchestrator.yaml}"
   cat <<EOF
-Add this to ~/.claude/settings.json (merge into existing "hooks"):
+The safe-autonomy guardrail pack. Merge into ~/.claude/settings.json "hooks":
 
 {
   "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "ORCH_CONFIG=$cfg $deny" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "ORCH_CONFIG=$cfg $gate", "timeout": 120 } ] }
+    ],
     "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          { "type": "command",
-            "command": "ORCH_CONFIG=$cfg $esc" }
-        ]
-      }
+      { "matcher": "Write|Edit",
+        "hooks": [ { "type": "command", "command": "ORCH_CONFIG=$cfg $sync" } ] }
     ]
   }
 }
+
+  PreToolUse / deny_guard — blocks force-push/delete of a protected branch and
+    rm -r of a home/root path (the irreversible ops the model can't be trusted
+    to never attempt). Deterministic; it cannot be talked past.
+  Stop / stop_gate       — a turn cannot end with a red 'gate:' on a dirty tree,
+    so an autonomous loop keeps fixing instead of stopping on red.
+  PostToolUse / sync     — the committed roster stays == the live one.
+
+'orchestrator work' with --permission-mode acceptEdits REFUSES to run unless
+deny_guard + stop_gate are installed — no unsupervised autonomy without the
+floor beneath it.
 
 And add these to crontab (crontab -e):
 

@@ -24,6 +24,8 @@ skills_dir: skills            # where the committed copy lives inside THIS repo
 #   consumer — an app/lib that exercises the product (a forcing function)
 #   infra    — distribution / CI / plumbing
 #   sibling  — deliberately coupled to a checkout; exempt from some signals
+#   subsidiary — a child company (its own orchestrator/health); its verdict is
+#              rolled up from that repo's reports/latest.md instead of re-scored
 #   parked   — silence is healthy; reported but never scored
 repos:
   - acme-core:product

@@ -88,3 +88,34 @@ t_health_governance_exempts_sibling() {  # sibling exempt even when public + no 
   local out; out="$(cd "$co" && PATH="$fb:$PATH" "$ORCH_BIN" health 2>&1)"
   assert_missing "sibling is exempt from the missing-LICENSE warn" "$out" "missing LICENSE"
 }
+
+t_health_subsidiary_rolls_up_green_child() {  # a subsidiary surfaces its child's OWN verdict
+  local root; root="$(mktemp -d)"; mkrepo "$root" childco
+  mkdir -p "$root/childco/reports"
+  printf -- '- Active repos: OK=5 WARN=0 FAIL=0 -> **GREEN**\n' > "$root/childco/reports/latest.md"
+  git -C "$root/childco" add .; git -C "$root/childco" commit -q -m report
+  local co; co="$(mkcompany "$root" "childco:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "subsidiary shows the rolled-up child verdict" "$out" "**GREEN** — subsidiary roll-up"
+  assert_contains "a GREEN child keeps the parent GREEN"          "$out" "→ **GREEN**"
+}
+
+t_health_subsidiary_red_child_fails_parent() {  # a RED child must make the parent RED (exit 1)
+  local root; root="$(mktemp -d)"; mkrepo "$root" sickco
+  mkdir -p "$root/sickco/reports"
+  printf -- '- Active repos: OK=1 WARN=0 FAIL=2 -> **RED**\n' > "$root/sickco/reports/latest.md"
+  git -C "$root/sickco" add .; git -C "$root/sickco" commit -q -m report
+  local co; co="$(mkcompany "$root" "sickco:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a RED child rolls up as RED" "$out" "**RED** — subsidiary roll-up"
+  assert_contains "a RED child turns the parent RED" "$out" "→ **RED**"
+  assert_ok "health exits nonzero when a subsidiary is RED" \
+    bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
+}
+
+t_health_subsidiary_missing_report_warns() {  # no child report to roll up -> WARN, never silent-OK
+  local root; root="$(mktemp -d)"; mkrepo "$root" noreport
+  local co; co="$(mkcompany "$root" "noreport:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a subsidiary with no health report warns" "$out" "no subsidiary health report"
+}

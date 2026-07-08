@@ -83,7 +83,7 @@ while IFS= read -r entry; do
     c30=$(git -C "$dir" log --oneline --since='30 days ago' 2>/dev/null | wc -l | tr -d ' ')
     [ "$dirty" -gt 0 ] && { status="WARN"; why="dirty tree"; }
     [ "$ab" != "-0/+0" ] && [ "$ab" != "?" ] && { status="WARN"; why="${why:+$why; }out of sync w/ origin"; }
-    if [ "$cat" != "parked" ] && [ "$cat" != "sibling" ] && [ "$c30" -eq 0 ]; then
+    if [ "$cat" != "parked" ] && [ "$cat" != "sibling" ] && [ "$cat" != "subsidiary" ] && [ "$c30" -eq 0 ]; then
       status="WARN"; why="${why:+$why; }no motion 30d"
     fi
   fi
@@ -104,16 +104,17 @@ while IFS= read -r entry; do
     ci="$(ci_of "$repo")"; meta="$(repo_meta "$repo")"; open="${meta%% *}"; priv="${meta##* }"
     if [ "$ci" = "failure" ] && [ "$cat" != "parked" ]; then
       status="FAIL"; why="${why:+$why; }CI red"
-    elif [ "$ci" = "-" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
+    elif [ "$ci" = "-" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ] && [ "$cat" != "subsidiary" ]; then
       # No workflow runs at all: a load-bearing repo with no CI gate must not
       # read the same as one with green CI. "-" (definitively no runs) warns;
-      # "?" (owner/gh undetermined) does not. Siblings are config-only, exempt.
+      # "?" (owner/gh undetermined) does not. Siblings/subsidiaries are exempt
+      # (a subsidiary's CI is its own instrument's concern, not the parent's).
       status="WARN"; why="${why:+$why; }no CI configured"
     fi
     # Missing LICENSE warns only for a PUBLIC repo: a license grants rights to
     # third parties who receive the code, so a private repo (no distribution)
     # correctly has none. Private/unknown visibility → informational count only.
-    if [ "$priv" = "false" ] && [ "$lic" = "0" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
+    if [ "$priv" = "false" ] && [ "$lic" = "0" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ] && [ "$cat" != "subsidiary" ]; then
       status="WARN"; why="${why:+$why; }missing LICENSE"
     fi
   fi
@@ -121,6 +122,20 @@ while IFS= read -r entry; do
   if [ "$cat" = "parked" ]; then
     status="parked"
     [ "${c30:-0}" != "-" ] && [ "${c30:-0}" -gt 0 ] 2>/dev/null && { status="parked!"; why="motion in a parked repo"; }
+  elif [ "$cat" = "subsidiary" ]; then
+    # A subsidiary is a child company with its OWN health instrument. Roll up its
+    # verdict from its reports/latest.md instead of re-scoring its repos here:
+    # GREEN->ok, YELLOW->warn, RED->fail (a RED child makes the parent RED).
+    # Missing/unreadable report -> WARN. The child's summary line is the only
+    # place GREEN|YELLOW|RED appears (row statuses use OK/WARN/FAIL/parked), so
+    # the last match on the file is its rolled-up verdict.
+    sub_state="$(grep -oE 'GREEN|YELLOW|RED' "$dir/reports/latest.md" 2>/dev/null | tail -1)"
+    case "$sub_state" in
+      GREEN)  status="GREEN";  why="subsidiary roll-up";          ok=$((ok+1));;
+      YELLOW) status="YELLOW"; why="subsidiary roll-up";          warn=$((warn+1));;
+      RED)    status="RED";    why="subsidiary roll-up";          fail=$((fail+1));;
+      *)      status="WARN";   why="no subsidiary health report"; warn=$((warn+1));;
+    esac
   else
     case "$status" in OK) ok=$((ok+1));; WARN) warn=$((warn+1));; FAIL) fail=$((fail+1));; esac
   fi

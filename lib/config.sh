@@ -39,7 +39,10 @@ orch_get() {
   val="$(awk -v k="$key" '
     /^[A-Za-z0-9_]+:/ {
       ky=$0; sub(/:.*/,"",ky)
-      if (ky==k) { v=$0; sub(/^[^:]*:[ \t]*/,"",v); sub(/[ \t]+#.*/,"",v); print v; exit }
+      if (ky==k) { v=$0; sub(/^[^:]*:[ \t]*/,"",v); sub(/[ \t]+#.*/,"",v); sub(/^#.*/,"",v); print v; exit }
+      # ^ strip an inline comment (whitespace-preceded), then a comment that is
+      #   the WHOLE value: an empty scalar + comment leaves "#..." with no
+      #   leading space after the key is removed, which the first sub misses (G2).
     }' "$ORCH_CONFIG")"
   [ -n "$val" ] && printf '%s\n' "$val" || printf '%s\n' "$def"
 }
@@ -49,7 +52,9 @@ _orch_list() {
   awk -v s="$1" '
     $0 ~ "^"s":[ \t]*$" { inb=1; next }
     inb && /^[A-Za-z0-9_]+:/ { inb=0 }
-    inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
+    inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+#.*/,"",l); sub(/^#.*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
+    # ^ list items strip inline comments too (G1): the same whitespace-preceded
+    #   rule as scalars, plus a comment-only "- # ..." line drops to empty.
   ' "$ORCH_CONFIG"
 }
 

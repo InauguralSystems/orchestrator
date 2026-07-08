@@ -46,6 +46,7 @@ t_work_carries_the_reframe_and_capture_discipline() {  # the loop's smarter beha
   assert_contains "captures the root-cause WHY, not the patch"    "$out" "ROOT CAUSE"
   assert_contains "proves the why with a failing-then-passing test" "$out" "FAILS without the fix"
   assert_contains "keeps external-memory continuity"              "$out" "CONTINUITY"
+  assert_contains "continuity is a first-class file, not just prose" "$out" "PROGRESS.md"
   assert_contains "wraps honestly before the hard bound"          "$out" "BOUNDS"
 }
 

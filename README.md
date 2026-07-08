@@ -87,6 +87,7 @@ stack, and the economics of running it on any model).
 | `orchestrator hire [--dry-run]` | Autonomous hiring round: hire/fire/update the roster |
 | `orchestrator propose [--dry-run]` | Research + propose the next repo (strategy) |
 | `orchestrator work [--dry-run]` | **The on-button.** Start an autonomous work session: report to the Chief of Staff, work the backlog, escalate to `propose` when it's dry, halt honestly when there's nothing real left |
+| `orchestrator progress [note]` | The work loop's external memory: no arg prints the progress file; a note appends a timestamped entry, so a later session resumes without re-deriving |
 | `orchestrator sweep` | The daily health + standup, committed |
 | `orchestrator doctor` | Check dependencies and config |
 | `orchestrator hook` | Print the PostToolUse hook + cron to wire up |

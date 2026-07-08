@@ -11,6 +11,9 @@
 #   orchestrator work [--dry-run]  autonomous work session: report to the Chief of
 #                                  Staff, work the backlog, escalate to propose when
 #                                  dry, halt honestly when there's nothing real left
+#   orchestrator progress [note]   the work loop's external memory: no arg prints
+#                                  the progress file; a note appends a timestamped
+#                                  entry so a later session resumes without re-deriving
 #   orchestrator perf-gate [baseline|check]  the n=5 statistical gate for perf
 #                                  claims (record baseline, then check for a
 #                                  confirmed non-overlapping speedup)
@@ -200,6 +203,35 @@ _guardrails_installed() {
   return 1
 }
 
+# The work loop's external memory — a first-class file the product manages, not a
+# prompt asking the model to "remember". Resolve the configured progress_file
+# (default reports/PROGRESS.md) relative to the company repo (ORCH_HOME).
+_orch_progress_path() {
+  local pf; pf="$(orch_get progress_file reports/PROGRESS.md)"
+  case "$pf" in
+    /*)   : ;;                          # absolute — as-is
+    "~"*) pf="$(orch_expand "$pf")";;   # home-relative
+    *)    pf="$ORCH_HOME/$pf";;         # repo-relative (the common case)
+  esac
+  printf '%s\n' "$pf"
+}
+
+# orchestrator progress [note...] — read the progress file (no arg) or append a
+# timestamped entry (with a note). This is the mechanism behind the work loop's
+# CONTINUITY: git is the source of truth, this is the human-readable resume note.
+cmd_progress() {
+  . "$PRODUCT/lib/config.sh" || exit 1
+  local pf; pf="$(_orch_progress_path)"
+  if [ "$#" -eq 0 ]; then
+    if [ -s "$pf" ]; then cat "$pf"; else echo "orchestrator: progress note empty ($pf)"; fi
+    return 0
+  fi
+  mkdir -p "$(dirname "$pf")" || die "cannot create $(dirname "$pf")"
+  [ -s "$pf" ] || printf '# %s — work-session progress log\n\n' "$(orch_get company Company)" > "$pf"
+  printf -- '- %sZ  %s\n' "$(date -u '+%Y-%m-%dT%H:%M')" "$*" >> "$pf"
+  echo "orchestrator: appended to $pf"
+}
+
 cmd_work() {
   . "$PRODUCT/lib/config.sh" || exit 1
   local dry=0; [ "${1:-}" = "--dry-run" ] && dry=1
@@ -207,6 +239,10 @@ cmd_work() {
   company="$(orch_get company Company)"
   root="$(orch_expand "$(orch_get root)")"
   cos="$(orch_get chief_of_staff triage)"   # the Chief of Staff / router skill
+  local progress_file resume
+  progress_file="$(_orch_progress_path)"
+  if [ -s "$progress_file" ]; then resume="$(cat "$progress_file")"
+  else resume="(empty — this is a fresh progress log; open it with your first entry)"; fi
   skills_dir="$ORCH_HOME/$(orch_get skills_dir skills)"
   roster="$(ls "$skills_dir" 2>/dev/null | tr '\n' ' ')"
   repos="$(orch_repos | sed 's/^/  - /')"
@@ -271,10 +307,17 @@ proves the cause is real, prevents recurrence, and turns a note into a mechanica
 check. Promote a load-bearing gotcha up the ladder: skill note -> regression test
 -> guard/hook. Never capture a plausible-but-unproven 'why'.
 
-CONTINUITY. You work in bounded sessions; treat context as curated, not infinite.
-Keep an explicit progress/state note and use git history as the source of truth,
-so a later session (or you, after compaction) can resume without re-deriving —
-record what's done, what's in flight, and the open threads.
+CONTINUITY (external memory — a real file, not your memory). You work in bounded
+sessions; treat context as curated, not infinite. Your progress note is a
+first-class file the product manages: $progress_file. READ IT FIRST — it is how a
+later session (or you, after compaction) resumes without re-deriving. Append to it
+as you land each piece and before you wrap, with:
+  orchestrator progress \"<what changed / what's in flight / the open thread>\"
+(it timestamps the entry). Git history is the corroborating source of truth. The
+note's current contents:
+--- BEGIN $progress_file ---
+$resume
+--- END progress note ---
 
 BOUNDS. There may be a hard wall-clock bound on this session; do not treat it as
 the place to stop. Wrap HONESTLY well before it: land or revert cleanly, update
@@ -370,6 +413,7 @@ main() {
     hire)     cmd_hire "$@";;
     propose)  cmd_propose "$@";;
     work)     cmd_work "$@";;
+    progress) cmd_progress "$@";;
     sweep)    . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/daily_sweep.sh" "$@";;
     perf-gate) exec bash "$PRODUCT/tools/perf_gate.sh" "$@";;
     doctor)   cmd_doctor;;

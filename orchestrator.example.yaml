@@ -11,6 +11,10 @@ chief_of_staff: triage        # the router skill `orchestrator work` reports to
 work_timeout: 3600            # deterministic wall-clock bound (a timeout(1)
                               # duration) under the work loop's honest-halt, so it
                               # can't run away. Optional; unset = no hard bound.
+progress_file: reports/PROGRESS.md  # the work loop's external memory — read at
+                              # session start, appended via `orchestrator progress`.
+                              # Repo-relative (to this file). Optional; this is the
+                              # default. Lets a later session resume without re-deriving.
 
 # --- Safe autonomy (the guardrail pack — see `orchestrator hook`) --------
 gate: bash tests/run.sh       # the command the Stop-gate runs on a dirty tree;

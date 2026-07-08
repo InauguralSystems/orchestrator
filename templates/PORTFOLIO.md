@@ -14,7 +14,7 @@ this file is the strategy layer over it.
 | consumer | An app/lib that exercises the product | yes |
 | infra    | Distribution / CI / plumbing | yes |
 | sibling  | Deliberately coupled to a checkout; exempt from motion | partial |
-| subsidiary | A child company; its own `reports/latest.md` verdict is rolled up (GREEN→ok, YELLOW→warn, RED→fail) | rollup |
+| subsidiary | A child company; its own `reports/latest.md` verdict is rolled up (GREEN→ok, YELLOW→warn, RED→fail); a stale report (> `ORCH_SUBSIDIARY_STALE_DAYS`, default 7) can't read as fresh — a stale non-fail drops to WARN | rollup |
 | parked   | Silence is healthy; reported, never scored | no |
 
 ## Covered areas

@@ -54,6 +54,18 @@ standards_of() {
   echo "$n/5 $lic"
 }
 
+# _days_since YYYY-MM-DD — whole days from that date to today. Echoes nothing
+# (empty) when the date is missing or unparseable, so callers can skip the check
+# rather than manufacture a warning. Portable: GNU `date -d` then BSD `date -j`.
+_days_since() {
+  [ -n "$1" ] || return 0
+  local then_ now
+  then_="$(date -d "$1" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$1" +%s 2>/dev/null)"
+  [ -n "$then_" ] || return 0
+  now="$(date +%s)"
+  echo $(( (now - then_) / 86400 ))
+}
+
 TODAY="$(date +%F)"
 {
   echo "# ${COMPANY} health — $TODAY"
@@ -136,6 +148,19 @@ while IFS= read -r entry; do
       RED)    status="RED";    why="subsidiary roll-up";          fail=$((fail+1));;
       *)      status="WARN";   why="no subsidiary health report"; warn=$((warn+1));;
     esac
+    # Staleness guard (measurement over claims): the rollup TRUSTS the child's
+    # self-reported verdict, so a report older than ORCH_SUBSIDIARY_STALE_DAYS
+    # (default 7) must not read as fresh. Age = newest date in the child's
+    # history.csv. A stale GREEN drops to WARN; a stale YELLOW is already WARN; a
+    # stale RED stays RED (never hide a known failure). No date -> skip (trust).
+    if [ -n "$sub_state" ]; then
+      sub_date="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$dir/reports/history.csv" 2>/dev/null | tail -1)"
+      sub_age="$(_days_since "$sub_date")"
+      if [ -n "$sub_age" ] && [ "$sub_age" -gt "${ORCH_SUBSIDIARY_STALE_DAYS:-7}" ]; then
+        why="subsidiary report ${sub_age}d stale (>${ORCH_SUBSIDIARY_STALE_DAYS:-7}d); last verdict $sub_state"
+        if [ "$status" = "GREEN" ]; then status="WARN"; ok=$((ok-1)); warn=$((warn+1)); fi
+      fi
+    fi
   else
     case "$status" in OK) ok=$((ok+1));; WARN) warn=$((warn+1));; FAIL) fail=$((fail+1));; esac
   fi

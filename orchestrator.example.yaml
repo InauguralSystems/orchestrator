@@ -25,7 +25,9 @@ skills_dir: skills            # where the committed copy lives inside THIS repo
 #   infra    — distribution / CI / plumbing
 #   sibling  — deliberately coupled to a checkout; exempt from some signals
 #   subsidiary — a child company (its own orchestrator/health); its verdict is
-#              rolled up from that repo's reports/latest.md instead of re-scored
+#              rolled up from that repo's reports/latest.md instead of re-scored.
+#              A report older than ORCH_SUBSIDIARY_STALE_DAYS (default 7) can't
+#              read as fresh: a stale non-failing verdict drops to WARN.
 #   parked   — silence is healthy; reported but never scored
 repos:
   - acme-core:product

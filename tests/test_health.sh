@@ -93,11 +93,35 @@ t_health_subsidiary_rolls_up_green_child() {  # a subsidiary surfaces its child'
   local root; root="$(mktemp -d)"; mkrepo "$root" childco
   mkdir -p "$root/childco/reports"
   printf -- '- Active repos: OK=5 WARN=0 FAIL=0 -> **GREEN**\n' > "$root/childco/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n%s,5,0,0,GREEN\n' "$(date +%F)" > "$root/childco/reports/history.csv"
   git -C "$root/childco" add .; git -C "$root/childco" commit -q -m report
   local co; co="$(mkcompany "$root" "childco:subsidiary")"
   local out; out="$(runco "$co" health --local 2>&1)"
   assert_contains "subsidiary shows the rolled-up child verdict" "$out" "**GREEN** — subsidiary roll-up"
-  assert_contains "a GREEN child keeps the parent GREEN"          "$out" "→ **GREEN**"
+  assert_contains "a fresh GREEN child keeps the parent GREEN"    "$out" "→ **GREEN**"
+}
+
+t_health_subsidiary_stale_green_downgraded() {  # a stale self-reported GREEN must not read as fresh
+  local root; root="$(mktemp -d)"; mkrepo "$root" staleco
+  mkdir -p "$root/staleco/reports"
+  printf -- '- Active repos: OK=5 WARN=0 FAIL=0 -> **GREEN**\n' > "$root/staleco/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n2000-01-01,5,0,0,GREEN\n' > "$root/staleco/reports/history.csv"
+  git -C "$root/staleco" add .; git -C "$root/staleco" commit -q -m stale
+  local co; co="$(mkcompany "$root" "staleco:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a stale subsidiary GREEN drops to WARN" "$out" "**WARN**"
+  assert_contains "the staleness is explained"            "$out" "stale"
+}
+
+t_health_subsidiary_stale_red_not_hidden() {  # staleness must never hide a known failure
+  local root; root="$(mktemp -d)"; mkrepo "$root" sickold
+  mkdir -p "$root/sickold/reports"
+  printf -- '- Active repos: OK=0 WARN=0 FAIL=3 -> **RED**\n' > "$root/sickold/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n2000-01-01,0,0,3,RED\n' > "$root/sickold/reports/history.csv"
+  git -C "$root/sickold" add .; git -C "$root/sickold" commit -q -m stalered
+  local co; co="$(mkcompany "$root" "sickold:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a stale RED is not hidden — stays RED" "$out" "**RED**"
 }
 
 t_health_subsidiary_red_child_fails_parent() {  # a RED child must make the parent RED (exit 1)

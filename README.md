@@ -69,8 +69,11 @@ Prefer to do it by hand? `orchestrator init` then edit `orchestrator.yaml`,
 `orchestrator doctor`, `orchestrator hook`, `orchestrator hire`,
 `orchestrator health --local`.
 
-See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit.
+See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough,
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit, and
+[docs/DESIGN.md](docs/DESIGN.md) for *why* they fit that way — the design
+rationale (proof over belief, recovery over accuracy, the gate/hook/flywheel
+stack, and the economics of running it on any model).
 
 ## Commands
 

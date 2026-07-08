@@ -38,10 +38,13 @@ CODE_OF_CONDUCT, CONTRIBUTING, SECURITY. Shown per repo as `Gov N/5`. This axis
 is deliberately **orthogonal** to gates/hygiene/motion — those measure whether a
 repo is *alive and green*; this measures whether it is *well-governed* (a repo
 can have passing CI yet no license or security policy). Escalation is
-conservative: only a **missing LICENSE** on a non-parked, non-sibling repo →
-WARN (the one unambiguous, universally-expected file; maps to CLOMonitor's
-Legal category). The other four are surfaced in the count but not yet
-mandatory — weighting them (a risk-weighted composite) is the next lever.
+conservative: only a **missing LICENSE on a PUBLIC repo** (non-parked,
+non-sibling) → WARN. A license grants rights to third parties who receive the
+code, so a **private** repo correctly needs none — private/unknown visibility
+shows the count only, never the warn. This maps to CLOMonitor's Legal category
+(which likewise scores public projects). The other four standards are surfaced
+in the count but not yet mandatory — weighting them (a risk-weighted composite)
+is the next lever.
 
 ## Scoring
 

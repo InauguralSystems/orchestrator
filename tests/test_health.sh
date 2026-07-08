@@ -44,12 +44,12 @@ t_health_warns_absent_ci() {  # G9: no CI configured must WARN, not read as gree
   assert_contains "absent-CI repo is WARN"   "$out" "**WARN**"
 }
 
-t_health_governance_flags_missing_license() {  # G3/G4: community-standards checklist
-  local root; root="$(mktemp -d)"; mkrepo "$root" nolic   # bare repo: no standards files
-  local co; co="$(mkcompany "$root" "nolic:consumer")"
-  local out; out="$(runco "$co" health --local 2>&1)"
-  assert_contains "governance column present (0/5)" "$out" "0/5"
-  assert_contains "missing LICENSE warns"           "$out" "missing LICENSE"
+# _fakegh DIR PRIVATE — write a fake `gh` into DIR that reports green CI and
+# repo_meta "OPEN PRIVATE" with the given private flag (true/false), no network.
+_fakegh() {
+  { echo '#!/usr/bin/env bash'
+    echo "case \"\$*\" in *\"run list\"*) echo success;; *\"api\"*) echo \"0 $2\";; *) exit 0;; esac"
+  } > "$1/gh"; chmod +x "$1/gh"
 }
 
 t_health_governance_counts_present_standards() {
@@ -59,12 +59,32 @@ t_health_governance_counts_present_standards() {
   local co; co="$(mkcompany "$root" "good:consumer")"
   local out; out="$(runco "$co" health --local 2>&1)"
   assert_contains "counts the three present standards" "$out" "3/5"
-  assert_missing  "no missing-LICENSE warn when present" "$out" "missing LICENSE"
 }
 
-t_health_governance_exempts_sibling() {
-  local root; root="$(mktemp -d)"; mkrepo "$root" sib     # no LICENSE, but a sibling
+t_health_governance_public_missing_license_warns() {  # G4: public repo, no LICENSE -> WARN
+  local root; root="$(mktemp -d)"; mkrepo "$root" pub
+  git -C "$root/pub" remote add origin https://github.com/acme/pub
+  local co; co="$(mkcompany "$root" "pub:consumer")"
+  local fb; fb="$(mktemp -d)"; _fakegh "$fb" false      # public
+  local out; out="$(cd "$co" && PATH="$fb:$PATH" "$ORCH_BIN" health 2>&1)"
+  assert_contains "governance column present (0/5)" "$out" "0/5"
+  assert_contains "public repo missing LICENSE warns" "$out" "missing LICENSE"
+}
+
+t_health_governance_private_repo_no_license_ok() {  # a private repo needs no license
+  local root; root="$(mktemp -d)"; mkrepo "$root" priv
+  git -C "$root/priv" remote add origin https://github.com/acme/priv
+  local co; co="$(mkcompany "$root" "priv:consumer")"
+  local fb; fb="$(mktemp -d)"; _fakegh "$fb" true       # private
+  local out; out="$(cd "$co" && PATH="$fb:$PATH" "$ORCH_BIN" health 2>&1)"
+  assert_missing "private repo not flagged for missing LICENSE" "$out" "missing LICENSE"
+}
+
+t_health_governance_exempts_sibling() {  # sibling exempt even when public + no LICENSE
+  local root; root="$(mktemp -d)"; mkrepo "$root" sib
+  git -C "$root/sib" remote add origin https://github.com/acme/sib
   local co; co="$(mkcompany "$root" "sib:sibling")"
-  local out; out="$(runco "$co" health --local 2>&1)"
+  local fb; fb="$(mktemp -d)"; _fakegh "$fb" false      # public, yet a sibling
+  local out; out="$(cd "$co" && PATH="$fb:$PATH" "$ORCH_BIN" health 2>&1)"
   assert_missing "sibling is exempt from the missing-LICENSE warn" "$out" "missing LICENSE"
 }

@@ -31,9 +31,11 @@ ci_of() { # latest workflow-run conclusion, or "-"
   gh run list -R "$o/$1" -L 1 --json conclusion \
     --jq 'if length==0 then "-" else (.[0].conclusion // "running") end' 2>/dev/null || echo "?"
 }
-open_of() { # open issues+PRs
-  local o; o="$(gh_owner "$1")"; [ -n "$o" ] || { echo "?"; return; }
-  gh api "repos/$o/$1" --jq '.open_issues_count' 2>/dev/null || echo "?"
+# repo_meta REPO — echo "OPEN PRIVATE": open issues+PRs and the private flag
+# (true/false), from one API call. "? ?" when the owner or gh is unavailable.
+repo_meta() {
+  local o; o="$(gh_owner "$1")"; [ -n "$o" ] || { echo "? ?"; return; }
+  gh api "repos/$o/$1" --jq '"\(.open_issues_count) \(.private)"' 2>/dev/null || echo "? ?"
 }
 
 # standards_of DIR — the community-standards presence checklist. Echoes
@@ -87,22 +89,19 @@ while IFS= read -r entry; do
   fi
 
   # Governance axis: the community-standards presence checklist (local signal).
-  # Show N/5 for every cloned repo; escalate only on a missing LICENSE (the one
-  # unambiguous, universally-expected file — maps to CLOMonitor's Legal
-  # category). The other four are surfaced in the count but not made mandatory
-  # here; weighting them is the next lever (risk-weighted composite).
+  # Show N/5 for every cloned repo. `lic` (LICENSE present) is used below — a
+  # missing LICENSE only matters for a PUBLIC repo, so the escalation lives in
+  # the network block where visibility is known. The other four standards are
+  # surfaced in the count but not yet mandatory (weighting = the next lever).
   if [ -d "$dir/.git" ]; then
     std="$(standards_of "$dir")"; gov="${std% *}"; lic="${std##* }"
-    if [ "$lic" = "0" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
-      status="WARN"; why="${why:+$why; }missing LICENSE"
-    fi
   else
-    gov="-"
+    gov="-"; lic=1   # unknown tree: don't manufacture a license warn
   fi
 
   ci="skip"; open="skip"
   if [ "$LOCAL_ONLY" -eq 0 ] && command -v gh >/dev/null 2>&1; then
-    ci="$(ci_of "$repo")"; open="$(open_of "$repo")"
+    ci="$(ci_of "$repo")"; meta="$(repo_meta "$repo")"; open="${meta%% *}"; priv="${meta##* }"
     if [ "$ci" = "failure" ] && [ "$cat" != "parked" ]; then
       status="FAIL"; why="${why:+$why; }CI red"
     elif [ "$ci" = "-" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
@@ -110,6 +109,12 @@ while IFS= read -r entry; do
       # read the same as one with green CI. "-" (definitively no runs) warns;
       # "?" (owner/gh undetermined) does not. Siblings are config-only, exempt.
       status="WARN"; why="${why:+$why; }no CI configured"
+    fi
+    # Missing LICENSE warns only for a PUBLIC repo: a license grants rights to
+    # third parties who receive the code, so a private repo (no distribution)
+    # correctly has none. Private/unknown visibility → informational count only.
+    if [ "$priv" = "false" ] && [ "$lic" = "0" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
+      status="WARN"; why="${why:+$why; }missing LICENSE"
     fi
   fi
 

@@ -8,7 +8,9 @@ API); it never builds, tests, or mutates a repo.
 
 ### 1. Gates (weight: highest)
 Latest CI conclusion per repo (`gh run list -L1`). A red default branch is a
-company-level FAIL — nothing outranks it. Repos without workflows report `-`.
+company-level FAIL — nothing outranks it. A non-parked, non-sibling repo with
+**no workflow runs at all** (`-`) → WARN ("no CI configured"): a missing gate
+is a signal, not a neutral, and must not read the same as green CI.
 
 ### 2. Hygiene
 Per repo: working tree clean, and local HEAD neither ahead of nor behind
@@ -28,6 +30,18 @@ resolves it (the live tree wins on the dev box).
 ### 5. Backlog pressure
 Open issues+PRs per repo. No absolute threshold — tracked in history so
 *pileup trends* are visible.
+
+### 6. Governance (the community-standards checklist)
+A **local** presence check (from the committed tree, so it works under
+`--local`) of five community-standards files: README, LICENSE,
+CODE_OF_CONDUCT, CONTRIBUTING, SECURITY. Shown per repo as `Gov N/5`. This axis
+is deliberately **orthogonal** to gates/hygiene/motion — those measure whether a
+repo is *alive and green*; this measures whether it is *well-governed* (a repo
+can have passing CI yet no license or security policy). Escalation is
+conservative: only a **missing LICENSE** on a non-parked, non-sibling repo →
+WARN (the one unambiguous, universally-expected file; maps to CLOMonitor's
+Legal category). The other four are surfaced in the count but not yet
+mandatory — weighting them (a risk-weighted composite) is the next lever.
 
 ## Scoring
 

@@ -36,12 +36,28 @@ open_of() { # open issues+PRs
   gh api "repos/$o/$1" --jq '.open_issues_count' 2>/dev/null || echo "?"
 }
 
+# standards_of DIR — the community-standards presence checklist. Echoes
+# "PRESENT/5 LICENSE_FLAG" for README, LICENSE, CODE_OF_CONDUCT, CONTRIBUTING,
+# SECURITY, read from the committed tree (independent of local checkout state).
+# Purely local — a governance signal that works even under --local. NOTE: the
+# regexes avoid empty alternations like (a|b|) — BSD/ugrep reject them; use ?.
+standards_of() {
+  local files n=0 lic=0
+  files="$(git -C "$1" ls-tree -r --name-only HEAD 2>/dev/null)" || { echo "0/5 0"; return; }
+  printf '%s\n' "$files" | grep -qiE '(^|/)readme(\.md|\.txt)?$'               && n=$((n+1))
+  if printf '%s\n' "$files" | grep -qiE '(^|/)(license|licence|copying)(\.md|\.txt)?$'; then n=$((n+1)); lic=1; fi
+  printf '%s\n' "$files" | grep -qiE '(^|/|\.github/)code_of_conduct(\.md)?$'  && n=$((n+1))
+  printf '%s\n' "$files" | grep -qiE '(^|/|\.github/)contributing(\.md)?$'     && n=$((n+1))
+  printf '%s\n' "$files" | grep -qiE '(^|/|\.github/)security(\.md)?$'         && n=$((n+1))
+  echo "$n/5 $lic"
+}
+
 TODAY="$(date +%F)"
 {
   echo "# ${COMPANY} health — $TODAY"
   echo
-  echo "| Repo | Cat | CI | Dirty | ±origin | 7d | 30d | Open | Status |"
-  echo "|---|---|---|---|---|---|---|---|---|"
+  echo "| Repo | Cat | CI | Dirty | ±origin | 7d | 30d | Open | Gov | Status |"
+  echo "|---|---|---|---|---|---|---|---|---|---|"
 } > "$REPORT"
 
 ok=0; warn=0; fail=0
@@ -70,6 +86,20 @@ while IFS= read -r entry; do
     fi
   fi
 
+  # Governance axis: the community-standards presence checklist (local signal).
+  # Show N/5 for every cloned repo; escalate only on a missing LICENSE (the one
+  # unambiguous, universally-expected file — maps to CLOMonitor's Legal
+  # category). The other four are surfaced in the count but not made mandatory
+  # here; weighting them is the next lever (risk-weighted composite).
+  if [ -d "$dir/.git" ]; then
+    std="$(standards_of "$dir")"; gov="${std% *}"; lic="${std##* }"
+    if [ "$lic" = "0" ] && [ "$cat" != "parked" ] && [ "$cat" != "sibling" ]; then
+      status="WARN"; why="${why:+$why; }missing LICENSE"
+    fi
+  else
+    gov="-"
+  fi
+
   ci="skip"; open="skip"
   if [ "$LOCAL_ONLY" -eq 0 ] && command -v gh >/dev/null 2>&1; then
     ci="$(ci_of "$repo")"; open="$(open_of "$repo")"
@@ -90,7 +120,7 @@ while IFS= read -r entry; do
     case "$status" in OK) ok=$((ok+1));; WARN) warn=$((warn+1));; FAIL) fail=$((fail+1));; esac
   fi
 
-  echo "| $repo | $cat | $ci | $dirty | $ab | $c7 | $c30 | $open | **$status**${why:+ — $why} |" >> "$REPORT"
+  echo "| $repo | $cat | $ci | $dirty | $ab | $c7 | $c30 | $open | $gov | **$status**${why:+ — $why} |" >> "$REPORT"
 done <<< "$(orch_repos)"
 
 # Skills drift: committed copy must match the live employees.

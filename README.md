@@ -83,12 +83,13 @@ stack, and the economics of running it on any model).
 | `orchestrator setup` | Onboarding agent: interviews you and configures the whole company |
 | `orchestrator health [--local]` | The scorecard: gates, hygiene, motion, backlog → GREEN/YELLOW/RED |
 | `orchestrator standup [days]` | What moved across the company + open PRs |
+| `orchestrator dashboard` | Render `reports/` into one self-contained HTML dashboard (health trend, repo table, standup, embedded subsidiary panels) |
 | `orchestrator sync [--install\|--check]` | Live skills ⇄ committed copy |
 | `orchestrator hire [--dry-run]` | Autonomous hiring round: hire/fire/update the roster |
 | `orchestrator propose [--dry-run]` | Research + propose the next repo (strategy) |
 | `orchestrator work [--dry-run]` | **The on-button.** Start an autonomous work session: report to the Chief of Staff, work the backlog, escalate to `propose` when it's dry, halt honestly when there's nothing real left |
 | `orchestrator progress [note]` | The work loop's external memory: no arg prints the progress file; a note appends a timestamped entry, so a later session resumes without re-deriving |
-| `orchestrator sweep` | The daily health + standup, committed |
+| `orchestrator sweep` | The daily health + standup + dashboard, committed |
 | `orchestrator doctor` | Check dependencies and config |
 | `orchestrator hook` | Print the PostToolUse hook + cron to wire up |
 

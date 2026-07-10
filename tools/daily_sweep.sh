@@ -15,6 +15,7 @@ echo "=== sweep $(date '+%F %T') ==="
 bash "$PRODUCT/tools/health.sh" > /dev/null 2>&1
 health_rc=$?
 bash "$PRODUCT/tools/standup.sh" 1 > reports/standup_latest.md 2>/dev/null
+bash "$PRODUCT/tools/dashboard.sh" > /dev/null 2>&1
 
 state=$(tail -1 reports/history.csv 2>/dev/null | awk -F, '{print $NF}')
 echo "health: ${state:-?} (exit $health_rc); reports updated"

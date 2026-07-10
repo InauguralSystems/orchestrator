@@ -5,6 +5,9 @@
 #   orchestrator setup           onboarding agent: configure the company for you
 #   orchestrator health [--local]  the scorecard (gates, hygiene, motion, backlog)
 #   orchestrator standup [days]  what moved across the company
+#   orchestrator dashboard       render reports/ into one self-contained HTML
+#                                dashboard (health trend, repo table, standup,
+#                                embedded subsidiary panels)
 #   orchestrator sync [--install|--check|--link]  live skills <-> committed copy (+ discovery links)
 #   orchestrator hire [--dry-run]  run an autonomous hiring round (HR)
 #   orchestrator propose [--dry-run]  research + propose the next repo (strategy)
@@ -409,6 +412,7 @@ main() {
     setup)    cmd_setup "$@";;
     health)   . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/health.sh" "$@";;
     standup)  . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/standup.sh" "$@";;
+    dashboard) . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/dashboard.sh" "$@";;
     sync)     . "$PRODUCT/lib/config.sh" || exit 1; exec bash "$PRODUCT/tools/sync_skills.sh" "$@";;
     hire)     cmd_hire "$@";;
     propose)  cmd_propose "$@";;

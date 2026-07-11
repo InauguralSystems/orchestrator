@@ -13,7 +13,7 @@ From zero to a measured company in about ten minutes.
 ## 1. Install the product
 
 ```sh
-git clone <your-fork>/orchestrator.git ~/tools/orchestrator
+git clone https://github.com/InauguralSystems/orchestrator.git ~/tools/orchestrator
 ln -s ~/tools/orchestrator/orchestrator ~/.local/bin/orchestrator
 orchestrator version
 ```

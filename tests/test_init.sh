@@ -21,6 +21,16 @@ t_init_scaffolds_starter_skills() {
   done
 }
 
+t_init_works_through_symlink() {
+  # QUICKSTART installs via `ln -s .../orchestrator ~/.local/bin/` — init must
+  # still find the product tree (example yaml, templates) behind the symlink.
+  local co bin; co="$(mkempty)"; bin="$(mktemp -d)"
+  ln -s "$ORCH_BIN" "$bin/orchestrator"
+  ( cd "$co" && "$bin/orchestrator" init ) >/dev/null 2>&1
+  assert_file "symlinked init writes orchestrator.yaml" "$co/orchestrator.yaml"
+  assert_file "symlinked init writes ROSTER.md"         "$co/ROSTER.md"
+}
+
 t_init_refuses_overwrite() {
   local co; co="$(mkempty)"
   runco "$co" init >/dev/null 2>&1

@@ -26,7 +26,15 @@
 #   orchestrator version | help
 set -u
 
-PRODUCT="$(cd "$(dirname "$0")" && pwd)"
+# Resolve symlinks so `ln -s .../orchestrator ~/.local/bin/` still finds the
+# product tree (templates, tools, orchestrator.example.yaml) next to the real script.
+SELF="$0"
+while [ -h "$SELF" ]; do
+  _d="$(cd "$(dirname "$SELF")" && pwd)"
+  SELF="$(readlink "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$_d/$SELF" ;; esac
+done
+PRODUCT="$(cd "$(dirname "$SELF")" && pwd)"
 VERSION="0.1.0"
 
 die() { echo "orchestrator: $*" >&2; exit 1; }

@@ -6,9 +6,10 @@ trust model.
 
 ## Reporting a vulnerability
 
-Email the maintainer (the address in the commercial license) with a
-repro-grounded description. Please don't open public issues for undisclosed
-vulnerabilities.
+Use GitHub's private vulnerability reporting (Security tab → "Report a
+vulnerability" on this repo), or email the maintainer at
+InauguralPhysicist@gmail.com with a repro-grounded description. Please don't
+open public issues for undisclosed vulnerabilities.
 
 ## Trust model
 

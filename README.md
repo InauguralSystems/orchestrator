@@ -242,5 +242,6 @@ company repo private (the hook and sweep auto-push), and only run autonomous
 
 ## License
 
-Proprietary. See [LICENSE](LICENSE). Not open source — this is a commercial
-product.
+MIT — see [LICENSE](LICENSE). The CLI is free and open source and stays that
+way. A paid hosted/team layer may come later; it will be a separate product,
+not a fence around this one.

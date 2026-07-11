@@ -1,30 +1,21 @@
-Orchestrator — Proprietary Software License
-Copyright (c) 2026 Inaugural Systems. All rights reserved.
+MIT License
 
-This software and its source code (the "Software") are the confidential and
-proprietary property of Inaugural Systems ("Licensor"). This is NOT open-source
-software.
+Copyright (c) 2026 Inaugural Systems
 
-1. Grant. Subject to a valid, paid license from Licensor, and to the terms of
-   the accompanying commercial license agreement or order form, Licensor grants
-   the purchaser ("Licensee") a non-exclusive, non-transferable, revocable
-   license to install and use the Software for Licensee's own internal
-   development operations.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-2. Restrictions. Except as expressly permitted by a written agreement with
-   Licensor, Licensee shall not: (a) redistribute, sublicense, sell, rent,
-   lease, or otherwise transfer the Software; (b) publish or disclose the
-   Software's source code; (c) remove or alter any proprietary notices; or
-   (d) use the Software to build a competing product.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-3. No Warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-
-4. Limitation of Liability. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY CLAIM,
-   DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
-
-5. Termination. This license terminates automatically upon any breach. Upon
-   termination, Licensee must cease all use and destroy all copies.
-
-For commercial licensing, contact the Licensor.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

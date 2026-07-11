@@ -18,8 +18,15 @@ set -u
 
 cmd="$(jq -r '.tool_input.command // empty' 2>/dev/null)"
 [ -n "$cmd" ] || exit 0
-# Content-writing commands (heredocs) may legitimately MENTION guarded strings.
-case "$cmd" in *"<<"*) exit 0;; esac
+# A heredoc/herestring BODY may legitimately MENTION guarded strings (e.g. when
+# writing this very guard to a file). Old behaviour exempted the WHOLE command if
+# it contained "<<" anywhere — so `rm -rf ~ <<<x` or a trailing `# <<` sailed
+# through. Instead, strip herestrings and everything from the first heredoc
+# operator onward, then inspect only the remaining COMMAND text. A real op placed
+# before/around a heredoc is still seen; guarded strings inside a body are not.
+scan="$(printf '%s' "$cmd" | sed 's/<<<[^[:space:];&|]*//g')"
+scan="${scan%%<<*}"
+[ -n "$scan" ] || exit 0
 
 deny() {
   jq -n --arg r "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
@@ -37,13 +44,13 @@ if PRODUCT="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)" && [ -f "$PRODUCT/lib
 fi
 
 # --- rule 1: force-push / delete of a protected branch ------------------
-if printf '%s' "$cmd" | grep -qE '\bgit\b[^;&|]*\bpush\b'; then
+if printf '%s' "$scan" | grep -qE '\bgit\b[^;&|]*\bpush\b'; then
   act=""
-  printf '%s' "$cmd" | grep -qE '\bpush\b[^;&|]*(--force-with-lease|--force|[[:space:]]-f([[:space:]]|$))' && act="force-push"
-  printf '%s' "$cmd" | grep -qE '\bpush\b[^;&|]*(--delete|[[:space:]]:)' && act="delete"
+  printf '%s' "$scan" | grep -qE '\bpush\b[^;&|]*(--force-with-lease|--force|[[:space:]]-f([[:space:]]|$))' && act="force-push"
+  printf '%s' "$scan" | grep -qE '\bpush\b[^;&|]*(--delete|[[:space:]]:)' && act="delete"
   if [ -n "$act" ]; then
     for b in $PROTECTED; do
-      if printf '%s' "$cmd" | grep -qE "([[:space:]/:]|^)${b}([[:space:]]|\$)"; then
+      if printf '%s' "$scan" | grep -qE "([[:space:]/:]|^)${b}([[:space:]]|\$)"; then
         deny "BLOCKED by guardrail (deny_guard): $act touches protected branch '$b'. Rewriting or removing shared history on '$b' is irreversible — use a feature branch and a PR. Override: touch /tmp/orch_deny_off (rm to restore)."
       fi
     done
@@ -52,9 +59,10 @@ fi
 
 # --- rule 2: rm -r of a home/root path ----------------------------------
 # A recursive rm (-r / -R in any flag combo) whose target is /, ~, $HOME, or
-# /home/<user> — the target must BE the root (a trailing / or subpath is a
-# specific dir, not the catastrophe this blocks).
-if printf '%s' "$cmd" | grep -qE '\brm\b[^;&|]*[[:space:]]-[A-Za-z]*[rR][A-Za-z]*[^;&|]*[[:space:]](/|~|\$HOME|/home/[^/[:space:]]+)([[:space:]]|$)'; then
+# /home/<user> — including a bare trailing slash or glob (~/, /home/user/,
+# $HOME/*), each equally catastrophic. A DEEPER subpath (/home/user/proj) is a
+# specific dir and is not blocked.
+if printf '%s' "$scan" | grep -qE '\brm\b[^;&|]*[[:space:]]-[A-Za-z]*[rR][A-Za-z]*[^;&|]*[[:space:]](/|~|\$HOME|/home/[^/[:space:]]+)(/)?\*?([[:space:]]|$)'; then
   deny "BLOCKED by guardrail (deny_guard): rm -r of a home/root path is unrecoverable. Target a specific subdirectory. Override: touch /tmp/orch_deny_off (rm to restore)."
 fi
 

@@ -340,10 +340,12 @@ clear summary when you wrap."
 
   if [ "$dry" = 1 ]; then printf '%s\n' "$prompt"; return 0; fi
   # Interlock: no unsupervised autonomy without the guardrail pack beneath it.
+  # Every permission mode that suppresses prompts must be covered — bypassPermissions
+  # is strictly more powerful than acceptEdits, so a gap here is the whole point.
   case "${ORCH_CLAUDE_FLAGS:-}" in
-    *acceptEdits*|*dangerously-skip-permissions*)
+    *acceptEdits*|*bypassPermissions*|*dangerously-skip-permissions*)
       if [ "${ORCH_UNSAFE:-0}" != "1" ] && ! _guardrails_installed; then
-        die "refusing autonomous acceptEdits without the guardrail pack (deny_guard + stop_gate). Run 'orchestrator hook' and install them, or set ORCH_UNSAFE=1 to override."
+        die "refusing a prompt-free autonomous run (acceptEdits/bypassPermissions) without the guardrail pack (deny_guard + stop_gate). Run 'orchestrator hook' and install them, or set ORCH_UNSAFE=1 to override."
       fi ;;
   esac
   if [ ! -d "$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")/$cos" ]; then

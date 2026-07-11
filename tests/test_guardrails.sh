@@ -26,13 +26,43 @@ t_denyguard_blocks_rm_of_root_paths() {
     "$(_deny '{"tool_input":{"command":"rm -rf /home/jon"}}')" '"deny"'
   assert_contains "rm -r -f / is denied (split flags)" \
     "$(_deny '{"tool_input":{"command":"rm -r -f /"}}')" '"deny"'
+  # Trailing slash / glob on a root is the SAME catastrophe — must not slip past.
+  assert_contains "rm -rf ~/ is denied (trailing slash)" \
+    "$(_deny '{"tool_input":{"command":"rm -rf ~/"}}')" '"deny"'
+  assert_contains "rm -rf /home/<user>/ is denied (trailing slash)" \
+    "$(_deny '{"tool_input":{"command":"rm -rf /home/jon/"}}')" '"deny"'
+  assert_contains "rm -rf \$HOME/* is denied (glob)" \
+    "$(_deny '{"tool_input":{"command":"rm -rf $HOME/*"}}')" '"deny"'
+}
+
+t_denyguard_no_heredoc_bypass() {
+  # A herestring or a trailing "# <<" once exempted the WHOLE command — a real op
+  # placed before/around a heredoc marker must still be inspected and denied.
+  assert_contains "rm -rf ~ with a herestring is still denied" \
+    "$(_deny '{"tool_input":{"command":"rm -rf ~ <<<x"}}')" '"deny"'
+  assert_contains "force-push with a herestring is still denied" \
+    "$(_deny '{"tool_input":{"command":"git push --force origin main <<<\"\""}}')" '"deny"'
+  assert_contains "rm -rf ~ with a trailing heredoc marker is still denied" \
+    "$(_deny '{"tool_input":{"command":"rm -rf ~ # <<"}}')" '"deny"'
 }
 
 t_denyguard_allows_subpaths_and_is_heredoc_exempt() {
   assert_missing "rm -rf of a scratch subdir is allowed" \
     "$(_deny '{"tool_input":{"command":"rm -rf /tmp/scratch"}}')" '"deny"'
-  assert_missing "a heredoc that MENTIONS a blocked op is exempt (content-writing)" \
+  assert_missing "rm -rf of a home SUBPATH is allowed" \
+    "$(_deny '{"tool_input":{"command":"rm -rf /home/jon/project/build"}}')" '"deny"'
+  assert_missing "a heredoc BODY that mentions a blocked op is exempt (content-writing)" \
     "$(_deny '{"tool_input":{"command":"cat <<EOF\ngit push --force origin main\nEOF"}}')" '"deny"'
+}
+
+t_work_refuses_bypasspermissions_without_the_pack() {  # the interlock, strongest mode
+  local root; root="$(mktemp -d)"; mkrepo "$root" acme
+  local co; co="$(mkcompany "$root" "acme:product")"
+  local home; home="$(mktemp -d)"     # empty HOME: no guardrail hooks anywhere
+  local out rc=0
+  out="$( cd "$co" && HOME="$home" ORCH_CLAUDE_FLAGS="--permission-mode bypassPermissions" "$ORCH_BIN" work 2>&1 )" || rc=$?
+  assert_ok "work refuses bypassPermissions with no guardrail pack" bash -c "[ $rc -ne 0 ]"
+  assert_contains "the refusal names the guardrail pack" "$out" "guardrail"
 }
 
 t_stopgate_blocks_stop_on_red() {   # dirty tree + failing gate -> exit 2 (keep working)

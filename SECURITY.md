@@ -18,8 +18,18 @@ a developer's own machine against repos they own. It has no server and no
 network listener. Its sensitive operations are local file mirroring and
 `git push`. Design accordingly:
 
+- **The config is executable code — treat an unfamiliar `orchestrator.yaml`
+  like an unfamiliar shell script.** The `gate:`, `perf_gate:`, and any
+  `bench:` values are run as shell commands (the correctness gate and the n=5
+  perf gate execute them). The config is auto-discovered from `./orchestrator.yaml`
+  in the current directory, so running a gate/hook while `cd`'d inside a repo
+  you cloned from someone else runs *their* commands as you. Only run
+  Orchestrator with a config you wrote or have read. This is the same trust
+  model as a `Makefile`, an npm `postinstall`, or `direnv` — inherent to a tool
+  that runs project-defined commands.
 - **Run it against repos you own.** The health/standup instruments are
-  read-only, but the autonomous rounds are not (below).
+  read-only (and never execute a scored repo's own git hooks/fsmonitor), but
+  the autonomous rounds are not (below).
 - **Keep the company repo private.** The sync hook and daily sweep
   auto-`git push`; anything committed to `skills/` or `reports/` is published
   immediately. Never put secrets in a skill or a report — use a private remote.

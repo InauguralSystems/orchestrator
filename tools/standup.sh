@@ -20,7 +20,8 @@ while IFS= read -r entry; do
   repo="${entry%%:*}"
   dir="$ROOT/$repo"
   [ -d "$dir/.git" ] || continue
-  log="$(git -C "$dir" log --oneline --since="${DAYS} days ago" --format='  - %s' 2>/dev/null)"
+  # Read-only: never let a scored repo's local git config (fsmonitor/hooks) run.
+  log="$(git -c core.fsmonitor= -c core.hooksPath=/dev/null --no-optional-locks -C "$dir" log --oneline --since="${DAYS} days ago" --format='  - %s' 2>/dev/null)"
   n="$(printf '%s' "$log" | grep -c . || true)"
   [ "$n" -eq 0 ] && continue
   any=1

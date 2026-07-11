@@ -7,6 +7,12 @@ set -u
 PRODUCT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$PRODUCT/lib/config.sh" || exit 1
 
+# gitro — inspect a scored repo WITHOUT running code it controls. A repo's own
+# .git/config can point core.fsmonitor / core.hooksPath at a command that git
+# would execute during an otherwise "read-only" status/log. Neutralise those and
+# never take a lock, so scoring a repo can't be turned into code execution.
+gitro() { git -c core.fsmonitor= -c core.hooksPath=/dev/null -c core.pager=cat --no-optional-locks "$@"; }
+
 LOCAL_ONLY=0
 [ "${1:-}" = "--local" ] && LOCAL_ONLY=1
 
@@ -42,7 +48,7 @@ repo_meta() {
 # regexes avoid empty alternations like (a|b|) — BSD/ugrep reject them; use ?.
 standards_of() {
   local files n=0 lic=0
-  files="$(git -C "$1" ls-tree -r --name-only HEAD 2>/dev/null)" || { echo "0/5 0"; return; }
+  files="$(gitro -C "$1" ls-tree -r --name-only HEAD 2>/dev/null)" || { echo "0/5 0"; return; }
   printf '%s\n' "$files" | grep -qiE '(^|/)readme(\.md|\.txt)?$'               && n=$((n+1))
   if printf '%s\n' "$files" | grep -qiE '(^|/)(license|licence|copying)(\.md|\.txt)?$'; then n=$((n+1)); lic=1; fi
   printf '%s\n' "$files" | grep -qiE '(^|/|\.github/)code_of_conduct(\.md)?$'  && n=$((n+1))
@@ -88,16 +94,16 @@ while IFS= read -r entry; do
       # rewrites reports/ before the repo is scored and the sweep commits it
       # right after, so reports/ churn must not read as a dirty tree — it made
       # every sweep score its own company WARN.
-      dirty=$(git -C "$dir" status --porcelain 2>/dev/null | grep -cv '^.. reports/')
+      dirty=$(gitro -C "$dir" status --porcelain 2>/dev/null | grep -cv '^.. reports/')
     else
-      dirty=$(git -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+      dirty=$(gitro -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     fi
-    if git -C "$dir" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
-      ab=$(git -C "$dir" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null \
+    if gitro -C "$dir" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+      ab=$(gitro -C "$dir" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null \
            | awk '{printf "-%s/+%s", $1, $2}')
     else ab="?"; fi
-    c7=$(git -C "$dir" log --oneline --since='7 days ago' 2>/dev/null | wc -l | tr -d ' ')
-    c30=$(git -C "$dir" log --oneline --since='30 days ago' 2>/dev/null | wc -l | tr -d ' ')
+    c7=$(gitro -C "$dir" log --oneline --since='7 days ago' 2>/dev/null | wc -l | tr -d ' ')
+    c30=$(gitro -C "$dir" log --oneline --since='30 days ago' 2>/dev/null | wc -l | tr -d ' ')
     [ "$dirty" -gt 0 ] && { status="WARN"; why="dirty tree"; }
     [ "$ab" != "-0/+0" ] && [ "$ab" != "?" ] && { status="WARN"; why="${why:+$why; }out of sync w/ origin"; }
     if [ "$cat" != "parked" ] && [ "$cat" != "sibling" ] && [ "$cat" != "subsidiary" ] && [ "$c30" -eq 0 ]; then

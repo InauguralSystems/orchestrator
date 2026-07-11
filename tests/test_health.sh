@@ -137,6 +137,25 @@ t_health_subsidiary_red_child_fails_parent() {  # a RED child must make the pare
     bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
 }
 
+t_health_own_reports_churn_not_dirty() {  # the instrument's own reports/ writes must not self-WARN
+  local root; root="$(mktemp -d)"; mkrepo "$root" selfco
+  local live; live="$(mktemp -d)"
+  local co="$root/selfco"                   # the company home IS a scored repo (the Meta layout)
+  { echo "company: TestCo"; echo "ceo: T"; echo "github_org:"
+    echo "root: $root"; echo "live_skills: $live"; echo "skills_dir: skills"
+    echo "repos:"; echo "  - selfco:sibling"
+    echo "vetoes:"; echo "  - No test left red."
+  } > "$co/orchestrator.yaml"
+  mkdir -p "$co/skills" "$co/reports"
+  echo old > "$co/reports/latest.md"
+  git -C "$co" add .; git -C "$co" commit -q -m config
+  local out; out="$(runco "$co" health --local 2>&1)"   # health rewrites reports/ mid-run
+  assert_missing "own reports/ churn is not a dirty tree" "$out" "dirty tree"
+  echo w > "$co/wip"                        # a real uncommitted file must still warn
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "real working changes still warn dirty" "$out" "dirty tree"
+}
+
 t_health_subsidiary_missing_report_warns() {  # no child report to roll up -> WARN, never silent-OK
   local root; root="$(mktemp -d)"; mkrepo "$root" noreport
   local co; co="$(mkcompany "$root" "noreport:subsidiary")"

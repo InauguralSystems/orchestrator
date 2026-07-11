@@ -83,7 +83,15 @@ while IFS= read -r entry; do
     dirty="-"; ab="-"; c7="-"; c30="-"
     [ "$cat" = "parked" ] || { status="WARN"; why="not cloned"; }
   else
-    dirty=$(git -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$dir" -ef "$ORCH_HOME" ]; then
+      # The company repo hosts the instrument's own artifacts: this very run
+      # rewrites reports/ before the repo is scored and the sweep commits it
+      # right after, so reports/ churn must not read as a dirty tree — it made
+      # every sweep score its own company WARN.
+      dirty=$(git -C "$dir" status --porcelain 2>/dev/null | grep -cv '^.. reports/')
+    else
+      dirty=$(git -C "$dir" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    fi
     if git -C "$dir" rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
       ab=$(git -C "$dir" rev-list --left-right --count '@{u}...HEAD' 2>/dev/null \
            | awk '{printf "-%s/+%s", $1, $2}')

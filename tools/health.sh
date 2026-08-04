@@ -172,6 +172,23 @@ while IFS= read -r entry; do
         if [ "$status" = "GREEN" ]; then status="WARN"; ok=$((ok-1)); warn=$((warn+1)); fi
       fi
     fi
+    # RED-and-stalled vs RED-in-motion (#1): a RED snapshotted mid-wave — the
+    # child actively working through a known-transient state — must not read
+    # like a RED nobody is on. Motion is read from the child's OWN records:
+    # commits in the last 7d EXCLUDING reports/ (a child's daily sweep commits
+    # reports even when stalled, so the raw count always looks busy), plus the
+    # trailing RED run length from its history.csv trend. Context only — the
+    # verdict stays RED and health still exits 1 either way.
+    if [ "$sub_state" = "RED" ] && [ -d "$dir/.git" ]; then
+      sub_work="$(gitro -C "$dir" log --oneline --since='7 days ago' -- . ':(exclude)reports' 2>/dev/null | wc -l | tr -d ' ')"
+      red_run="$(awk -F, 'NR>1 { if ($NF=="RED") n++; else n=0 } END {print n+0}' "$dir/reports/history.csv" 2>/dev/null)"
+      run_note=""; [ "${red_run:-0}" -gt 0 ] 2>/dev/null && run_note=", RED ${red_run}d running"
+      if [ "${sub_work:-0}" -gt 0 ] 2>/dev/null; then
+        why="$why (in motion: ${sub_work} non-report commits 7d${run_note})"
+      else
+        why="$why (STALLED: no non-report commits 7d${run_note})"
+      fi
+    fi
   else
     case "$status" in OK) ok=$((ok+1));; WARN) warn=$((warn+1));; FAIL) fail=$((fail+1));; esac
   fi

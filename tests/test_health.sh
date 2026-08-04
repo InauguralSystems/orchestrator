@@ -137,6 +137,37 @@ t_health_subsidiary_red_child_fails_parent() {  # a RED child must make the pare
     bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
 }
 
+t_health_subsidiary_red_in_motion_annotated() {  # #1: a RED child with recent work reads in-motion
+  local root; root="$(mktemp -d)"; mkrepo "$root" busyco   # mkrepo's commit = recent non-report work
+  mkdir -p "$root/busyco/reports"
+  printf -- '- Active repos: OK=1 WARN=0 FAIL=2 -> **RED**\n' > "$root/busyco/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n%s,1,0,2,RED\n' "$(date +%F)" > "$root/busyco/reports/history.csv"
+  git -C "$root/busyco" add .; git -C "$root/busyco" commit -q -m report
+  local co; co="$(mkcompany "$root" "busyco:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a working RED child is annotated in motion" "$out" "in motion:"
+  assert_contains "the RED run length is surfaced"             "$out" "RED 1d running"
+  assert_ok "an in-motion RED still fails the parent (exit 1)" \
+    bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
+}
+
+t_health_subsidiary_red_stalled_annotated() {  # #1: a RED child with no real work reads STALLED
+  local root; root="$(mktemp -d)"; local d="$root/deadco"; mkdir -p "$d"; _gitinit "$d"
+  echo x > "$d/f"; git -C "$d" add .
+  GIT_AUTHOR_DATE='2000-01-01T00:00:00' GIT_COMMITTER_DATE='2000-01-01T00:00:00' \
+    git -C "$d" commit -q -m init                     # the only non-report commit is ancient
+  mkdir -p "$d/reports"
+  printf -- '- Active repos: OK=0 WARN=0 FAIL=3 -> **RED**\n' > "$d/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n%s,0,0,3,RED\n%s,0,0,3,RED\n' "$(date +%F)" "$(date +%F)" \
+    > "$d/reports/history.csv"
+  git -C "$d" add reports; git -C "$d" commit -q -m sweep   # recent but reports-only — excluded
+  local co; co="$(mkcompany "$root" "deadco:subsidiary")"
+  local out; out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a workless RED child is annotated STALLED"  "$out" "STALLED:"
+  assert_contains "the RED run counts consecutive RED entries" "$out" "RED 2d running"
+  assert_missing "a stalled child is not called in motion"     "$out" "in motion:"
+}
+
 t_health_own_reports_churn_not_dirty() {  # the instrument's own reports/ writes must not self-WARN
   local root; root="$(mktemp -d)"; mkrepo "$root" selfco
   local live; live="$(mktemp -d)"

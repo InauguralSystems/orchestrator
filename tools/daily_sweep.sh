@@ -28,5 +28,14 @@ if ! git diff --cached --quiet -- reports/ 2>/dev/null; then
 fi
 
 if [ "$health_rc" -ne 0 ]; then
-  echo "ATTENTION: company state RED — read reports/latest.md"
+  # RED triage context (#1): a stalled subsidiary is a different alarm from one
+  # snapshotted mid-wave. health.sh writes the annotation on the subsidiary row;
+  # surface it here so the sweep log line alone says which alarm this is.
+  if grep -q 'STALLED:' reports/latest.md 2>/dev/null; then
+    echo "ATTENTION: company state RED — subsidiary STALLED; read reports/latest.md"
+  elif grep -q 'in motion:' reports/latest.md 2>/dev/null; then
+    echo "ATTENTION: company state RED (subsidiary in motion — likely mid-wave); read reports/latest.md"
+  else
+    echo "ATTENTION: company state RED — read reports/latest.md"
+  fi
 fi

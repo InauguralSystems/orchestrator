@@ -32,5 +32,5 @@ company. Every employee follows this loop; it is the company's Ops Manager.
 - A revert of a bad change beats limping it past the gate.
 
 ## Background & long-running work
-- Kick long jobs off explicitly; report when they finish, not before.
-- Never claim a result you have not observed.
+- Kick long jobs off explicitly and say what is running; report a job's
+  result only once it has finished and you have observed it.

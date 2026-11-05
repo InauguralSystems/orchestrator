@@ -50,12 +50,43 @@ orch_get() {
 # _orch_list SECTION — emit each "- item" under a top-level "section:" block
 _orch_list() {
   awk -v s="$1" '
-    $0 ~ "^"s":[ \t]*$" { inb=1; next }
+    $0 ~ "^"s":[ \t]*(#.*)?$" { inb=1; next }
+    # ^ the header may carry a comment ("reports_publish:   # optional"); a
+    #   header the parser did not recognise used to drop the whole list silently.
     inb && /^[A-Za-z0-9_]+:/ { inb=0 }
     inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+#.*/,"",l); sub(/^#.*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
     # ^ list items strip inline comments too (G1): the same whitespace-preceded
     #   rule as scalars, plus a comment-only "- # ..." line drops to empty.
   ' "$ORCH_CONFIG"
+}
+
+# orch_sub_reports DIR TMP — the directory to read a subsidiary's reports from.
+# A child that publishes its reports to a branch (`reports_branch:` in ITS
+# orchestrator.yaml, or `subsidiary_reports_branch:` in ours for a child that
+# runs its own tooling) keeps no report files on its default branch, so a clone
+# that never ran the child's sweep has nothing on disk. Read the newer of the
+# two copies: the checkout's files, or the branch (local or origin, whichever
+# tip is newer) extracted under TMP. "Newer" is the last date in history.csv,
+# the same clock the staleness guard uses; a tie goes to the checkout.
+orch_sub_reports() {
+  local dir="$1" tmp="$2" b="" sha out f d_disk d_br
+  [ -f "$dir/orchestrator.yaml" ] && b="$(ORCH_CONFIG="$dir/orchestrator.yaml"; orch_get reports_branch)"
+  [ -n "$b" ] || b="$(orch_get subsidiary_reports_branch)"
+  if [ -z "$b" ] || ! git check-ref-format --branch "$b" >/dev/null 2>&1; then printf '%s\n' "$dir/reports"; return; fi
+  sha="$(git -C "$dir" -c core.fsmonitor= -c core.hooksPath=/dev/null --no-optional-locks for-each-ref \
+           --sort=-committerdate --count=1 --format='%(objectname)' "refs/heads/$b" "refs/remotes/origin/$b" 2>/dev/null)"
+  if [ -z "$sha" ] || ! git -C "$dir" cat-file -e "$sha:reports/latest.md" 2>/dev/null; then printf '%s\n' "$dir/reports"; return; fi
+  out="$tmp/$(basename "$dir")"; mkdir -p "$out" || { printf '%s\n' "$dir/reports"; return; }
+  for f in latest.md history.csv standup_latest.md; do
+    git -C "$dir" cat-file -e "$sha:reports/$f" 2>/dev/null && git -C "$dir" cat-file blob "$sha:reports/$f" > "$out/$f"
+  done
+  if [ -f "$dir/reports/latest.md" ]; then
+    d_disk="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$dir/reports/history.csv" 2>/dev/null | tail -1)"
+    d_br="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$out/history.csv" 2>/dev/null | tail -1)"
+    # ISO dates order as strings. Checkout wins unless the branch is strictly newer.
+    if [ -z "$d_br" ] || { [ -n "$d_disk" ] && [ ! "$d_disk" \< "$d_br" ]; }; then printf '%s\n' "$dir/reports"; return; fi
+  fi
+  printf '%s\n' "$out"
 }
 
 orch_repos()  { _orch_list repos; }   # each line: name:category

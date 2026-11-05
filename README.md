@@ -37,7 +37,9 @@ don't scale to twenty repos. Orchestrator makes the org legible:
 - **A daily sweep.** A cron job runs health + standup, commits the reports,
   and shouts on RED — the backlog gets checked even when nobody asks. If your
   default branch is protected, set `reports_branch:` and the sweep publishes
-  the reports to a branch of their own instead of needing a bypass.
+  the reports to a branch of their own instead of needing a bypass. That branch
+  then holds the trend: each sweep restores it first, so a fresh clone carries
+  the history on, and a parent company reads a subsidiary's board from there.
 - **Security, pre-hired.** Every company ships with a `security` employee — an
   AppSec reviewer for secrets, injection, auth boundaries, SSRF, and
   supply-chain risk — because the people who most need it are the ones who

@@ -101,3 +101,14 @@ EOF
   assert_missing  "raw script tag never survives" "$html" "<script>"
   assert_contains "markup is escaped, not dropped" "$html" "&lt;script&gt;"
 }
+
+t_dashboard_subsidiary_panel_from_its_reports_branch() {
+  local root co html; root="$(mkroot_dir)"
+  _published_child "$root" child RED "$(date +%F)"
+  co="$(mkcompany "$root" "child:subsidiary")"
+  mkreports "$co" YELLOW
+  runco "$co" dashboard >/dev/null
+  html="$(cat "$co/reports/dashboard.html")"
+  assert_contains "the panel renders the board the child published" "$html" ">RED</span>"
+  assert_missing "and not the no-report note for it" "$(printf '%s' "$html" | sed -n '/Subsidiary — child/,$p')" "No health report yet"
+}

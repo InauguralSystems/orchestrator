@@ -2,7 +2,8 @@
 # publish_reports.sh — commit generated report files to a dedicated branch and
 # push it, without touching the working checkout.
 #
-# Usage: publish_reports.sh [-C DIR] [-m MESSAGE] BRANCH FILE...
+# Usage: publish_reports.sh [-C DIR] [-m MESSAGE] [-k FILE]... BRANCH [FILE...]
+#        publish_reports.sh --restore [-C DIR] [-k FILE]... BRANCH [FILE...]
 #
 # Why this exists. The daily sweep used to commit reports/ on whatever branch
 # the company checkout was on and push that. Two things broke it at once when
@@ -12,12 +13,27 @@
 #     is rarely on the default branch; the sweep then pushed its reports to a
 #     merged PR's branch for a week and nothing looked wrong.
 # So the generated reports get a branch of their own. Each run makes one commit
-# whose tree is exactly the named FILEs as they are on disk, on top of the
-# previous run's commit.
+# whose tree is exactly the named FILEs, byte for byte as they are on disk (no
+# clean filter, no line-ending conversion), on top of the previous run's commit.
 #
 # What it does not touch: HEAD, the current branch, the index, the working
 # tree. It uses a private index, so it works from any branch, with a dirty
 # tree, and on files .gitignore excludes.
+#
+# Files that keep history (-k). A file like history.csv only ever grows, and
+# once the report files are untracked the branch holds the only durable copy.
+# A fresh clone, or a pull that deletes the formerly tracked copies, leaves the
+# checkout with no history; the generator then starts a new file, and a publish
+# of that would replace the whole trend with one row. Two defences:
+#   --restore   run BEFORE the generators. Brings each named file up to date
+#               with the published copy: writes it when the local one is
+#               missing or empty, and otherwise puts back the published lines
+#               the local copy lacks, keeping local lines the branch has not
+#               seen. Snapshot files (latest.md) do not need it.
+#   -k FILE     in a publish: FILE is published like any other, but the run is
+#               refused (exit 6) if the published copy is not a prefix of the
+#               local one, that is, if publishing would drop published lines.
+#               $PUBLISH_ALLOW_REWRITE=1 lifts this for a deliberate trim.
 #
 # What it refuses, because each is a way to publish the wrong thing or to the
 # wrong place:
@@ -30,36 +46,83 @@
 #     carries a "Published-By:" trailer): a commit here replaces the whole
 #     tree, so pointing it at a code branch would empty that branch
 #   - a FILE outside reports/, or one reached through a symlink: a link in
-#     reports/ would otherwise publish whatever it points at
+#     reports/ would otherwise publish whatever it points at (and --restore
+#     would write through it)
 # FILEs are relative to the repository root.
 #
-# Exit 0  published, or nothing changed and nothing was waiting to be pushed
+# Exit 0  published, or nothing changed and nothing was waiting to be pushed;
+#         --restore: every named file is up to date with the published copy
 #      2  usage, a FILE that is not a plain file under reports/, or none of the
 #         FILEs exist (zero files is never a pass)
 #      3  refused: BRANCH is a default/protected branch, is checked out here,
 #         or exists and is not a reports branch
 #      4  the remote branch has commits this clone does not; never force-pushes
-#      5  committed locally but the push failed; the next run pushes the queue
+#      5  committed locally but the push failed; the next run pushes the queue.
+#         (With -k files, no copy of BRANCH and no remote: nothing is committed.)
+#         --restore: the remote could not be reached, so the files are only as
+#         current as the last copy this clone saw
+#      6  refused: a -k FILE would lose published lines
 set -u
 
 REMOTE="${PUBLISH_REMOTE:-origin}"
-DIR="."; MSG=""
+DIR="."; MSG=""; RESTORE=0; KEEP=()
+usage() { echo "usage: publish_reports.sh [--restore] [-C DIR] [-m MESSAGE] [-k FILE]... BRANCH [FILE...]" >&2; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    -C) DIR="$2"; shift 2;;
-    -m) MSG="$2"; shift 2;;
+    --restore) RESTORE=1; shift;;
+    -C) [ $# -ge 2 ] || usage; DIR="$2"; shift 2;;
+    -m) [ $# -ge 2 ] || usage; MSG="$2"; shift 2;;
+    -k) [ $# -ge 2 ] || usage; KEEP+=("$2"); shift 2;;
     --) shift; break;;
     -*) echo "publish_reports: unknown option $1" >&2; exit 2;;
     *)  break;;
   esac
 done
-[ $# -ge 2 ] || { echo "usage: publish_reports.sh [-C DIR] [-m MESSAGE] BRANCH FILE..." >&2; exit 2; }
+[ $# -ge 1 ] || usage
 BRANCH="$1"; shift
+[ $(( $# + ${#KEEP[@]} )) -ge 1 ] || usage
+# --restore treats every named file as one that keeps history.
+if [ "$RESTORE" -eq 1 ] && [ $# -gt 0 ]; then KEEP+=("$@"); set --; fi
 
 cd "$DIR" || exit 2
 TOP="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "publish_reports: $DIR is not inside a git working tree" >&2; exit 2; }
 cd "$TOP" || exit 2
 TOP="$(pwd -P)"
+# check_path FILE — under reports/, no "." or ".." or empty component, and no
+# symlink at any component (checked on links that dangle too). TOP is the
+# physical root and the cwd, so a path that passes names exactly $TOP/FILE.
+# Pure shell on purpose: no realpath, which is not a dependency of the product.
+check_path() {
+  local f="$1" p="" comp rest
+  case "$f" in
+    reports/?*) ;;
+    *) echo "publish_reports: '$f' is not under reports/; refusing" >&2; exit 2;;
+  esac
+  case "/$f/" in
+    *//*|*/./*|*/../*) echo "publish_reports: '$f' is not a normal path ('.', '..' or an empty component); refusing" >&2; exit 2;;
+  esac
+  rest="$f"
+  while [ -n "$rest" ]; do
+    comp="${rest%%/*}"
+    case "$rest" in */*) rest="${rest#*/}";; *) rest="";; esac
+    p="${p:+$p/}$comp"
+    if [ -L "$p" ]; then
+      echo "publish_reports: '$f' is, or is reached through, a symlink ('$p'); refusing" >&2
+      exit 2
+    fi
+  done
+  if [ -e "$f" ] && [ ! -f "$f" ]; then
+    echo "publish_reports: '$f' is not a plain file; refusing" >&2
+    exit 2
+  fi
+}
+# is_prefix A B — the bytes of A are the start of B.
+is_prefix() {
+  local n; n="$(wc -c < "$1" | tr -d ' ')"
+  [ "$n" -eq 0 ] && return 0
+  [ "$n" -le "$(wc -c < "$2" | tr -d ' ')" ] && cmp -s -n "$n" "$1" "$2"
+}
+
 git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || { echo "publish_reports: '$BRANCH' is not a branch name" >&2; exit 2; }
 
 # Never the default branch. Ask the remote what its default is; fall back to
@@ -97,17 +160,20 @@ fi
 LOCAL="refs/heads/$BRANCH"
 TRACK="refs/remotes/$REMOTE/$BRANCH"
 
-# Where the remote is. A failed fetch (offline) is not an error yet: the commit
-# is still made and queued, and the push below reports the failure.
-fetched=0
+# Where the remote is. Three outcomes: fetched, the branch is not there yet, or
+# the remote cannot be reached. Unreachable is not an error for a publish: the
+# commit is still made and queued, and the push below reports the failure.
+fetched=0; unreachable=0
 if git fetch -q "$REMOTE" "+refs/heads/$BRANCH:$TRACK" 2>/dev/null; then fetched=1; fi
 remote_tip="$(git rev-parse -q --verify "$TRACK^{commit}" 2>/dev/null || true)"
-if [ "$fetched" -eq 0 ] && [ -n "$remote_tip" ]; then
-  # The fetch failed but a tracking ref exists. If the remote can be reached
-  # and has no such branch, the tracking ref is a leftover (the branch was
-  # deleted); drop it so the first publish does not look like a divergence.
+if [ "$fetched" -eq 0 ]; then
   git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1
-  if [ $? -eq 2 ]; then git update-ref -d "$TRACK"; remote_tip=""; fi
+  case $? in
+    2) # Reachable, no such branch. A tracking ref is then a leftover (the branch
+       # was deleted); drop it so the first publish does not look like a divergence.
+       if [ -n "$remote_tip" ]; then git update-ref -d "$TRACK"; remote_tip=""; fi;;
+    *) unreachable=1;;
+  esac
 fi
 local_tip="$(git rev-parse -q --verify "$LOCAL^{commit}" 2>/dev/null || true)"
 
@@ -129,25 +195,79 @@ if [ -n "$parent" ] && ! git log -1 --format=%B "$parent" | grep -qxF "$MARK"; t
   exit 3
 fi
 
-# The tree: exactly the FILEs that exist, as they are on disk right now.
 TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "$TMP"' EXIT
+
+if [ "$RESTORE" -eq 1 ]; then
+  # Bring each history-keeping file up to date with the published copy. Nothing
+  # is committed or pushed. Output for a file is printed only AFTER that file is
+  # written: the sweep log is itself one of these files and receives this output.
+  for f in ${KEEP[@]+"${KEEP[@]}"}; do check_path "$f"; done
+  if [ -z "$parent" ]; then
+    if [ "$unreachable" -eq 1 ]; then
+      echo "publish_reports: RESTORE FAILED — $REMOTE cannot be reached and this clone has no copy of '$BRANCH'; local history files were left as they are" >&2
+      exit 5
+    fi
+    echo "publish_reports: nothing published on $REMOTE/$BRANCH yet; nothing to restore"
+    exit 0
+  fi
+  for f in ${KEEP[@]+"${KEEP[@]}"}; do
+    git cat-file -e "$parent:$f" 2>/dev/null || continue      # never published
+    git cat-file blob "$parent:$f" > "$TMP/pub" || exit 2
+    if [ ! -s "$f" ]; then
+      mkdir -p "$(dirname "$f")" && cat "$TMP/pub" > "$f" || exit 2
+      echo "publish_reports: restored $f from $REMOTE/$BRANCH ($(wc -l < "$TMP/pub" | tr -d ' ') line(s)); the local copy was missing or empty"
+    elif ! is_prefix "$TMP/pub" "$f"; then
+      # The local copy lacks published lines. Result: every published line, in
+      # order, then the local lines the branch has not seen. "Not seen" = what
+      # is left of the local copy after dropping its common start with the
+      # published one (a CSV header, or history both sides share) and then the
+      # longest run that the published copy ends with and the rest starts with.
+      awk -v pf="$TMP/pub" '
+        BEGIN { while ((getline line < pf) > 0) P[++np] = line }
+        { L[++nl] = $0 }
+        END {
+          c = 0; while (c < np && c < nl && P[c+1] == L[c+1]) c++
+          k = nl - c; if (k > np) k = np
+          for (; k > 0; k--) {
+            ok = 1
+            for (i = 1; i <= k; i++) if (P[np-k+i] != L[c+i]) { ok = 0; break }
+            if (ok) break
+          }
+          for (i = 1; i <= np; i++) print P[i]
+          for (i = c + k + 1; i <= nl; i++) print L[i]
+        }' "$f" > "$TMP/merged" || exit 2
+      before="$(wc -l < "$f" | tr -d ' ')"
+      cat "$TMP/merged" > "$f" || exit 2          # in place: keeps the inode an appender has open
+      echo "publish_reports: reconciled $f with $REMOTE/$BRANCH: $before local line(s) became $(wc -l < "$f" | tr -d ' ') (published lines the local copy lacked were put back)"
+    fi
+  done
+  if [ "$unreachable" -eq 1 ]; then
+    echo "publish_reports: RESTORE INCOMPLETE — $REMOTE cannot be reached; history files are only as current as this clone's last copy of '$BRANCH' ($(git rev-parse --short "$parent"))" >&2
+    exit 5
+  fi
+  exit 0
+fi
+
+# No copy of the branch anywhere and no way to ask: this may be a clone that
+# has simply never fetched it. A first commit made now would be a second,
+# unrelated history for files that keep one, and a divergence to sort out by
+# hand later. Wait for the remote instead; the next run restores and publishes.
+if [ -z "$parent" ] && [ "$unreachable" -eq 1 ] && [ "${#KEEP[@]}" -gt 0 ]; then
+  echo "publish_reports: PUSH FAILED — $REMOTE cannot be reached and this clone has no copy of '$BRANCH'; nothing was committed, so that files that keep history are not started over. The next run with $REMOTE reachable publishes." >&2
+  exit 5
+fi
+
+# The tree: exactly the FILEs that exist, byte for byte as they are on disk
+# right now. --no-filters: a clean filter or autocrlf in this clone's config
+# must not change what the board says.
 export GIT_INDEX_FILE="$TMP/index"
 git read-tree --empty
 n=0
-for f in "$@"; do
-  case "$f" in
-    reports/?*) ;;
-    *) echo "publish_reports: '$f' is not under reports/; refusing" >&2; exit 2;;
-  esac
-  # No symlink anywhere on the path, and no "..": the resolved path must be
-  # the literal one. Checked on links that dangle too (-L before -e).
-  if [ -L "$f" ] || { [ -e "$f" ] && [ "$(realpath -e -- "$f" 2>/dev/null)" != "$TOP/$f" ]; }; then
-    echo "publish_reports: '$f' is, or is reached through, a symlink (or is not a normal path); refusing" >&2
-    exit 2
-  fi
+for f in ${KEEP[@]+"${KEEP[@]}"} "$@"; do
+  check_path "$f"
   if [ -f "$f" ]; then
-    blob="$(git hash-object -w -- "$f")" || exit 2
+    blob="$(git hash-object -w --no-filters -- "$f")" || exit 2
     git update-index --add --cacheinfo "100644,$blob,$f" || exit 2
     n=$((n+1))
   else
@@ -155,8 +275,19 @@ for f in "$@"; do
   fi
 done
 if [ "$n" -eq 0 ]; then
-  echo "publish_reports: FAILED — none of the $# named files exist; nothing to publish" >&2
+  echo "publish_reports: FAILED — none of the $(( $# + ${#KEEP[@]} )) named files exist; nothing to publish" >&2
   exit 2
+fi
+# A file that keeps history must not lose published lines.
+if [ -n "$parent" ] && [ "${PUBLISH_ALLOW_REWRITE:-0}" != "1" ]; then
+  for f in ${KEEP[@]+"${KEEP[@]}"}; do
+    git cat-file -e "$parent:$f" 2>/dev/null || continue
+    git cat-file blob "$parent:$f" > "$TMP/pub" || exit 2
+    if [ ! -f "$f" ] || ! is_prefix "$TMP/pub" "$f"; then
+      echo "publish_reports: refusing — $f keeps history, and the local copy does not start with the $(wc -l < "$TMP/pub" | tr -d ' ') line(s) already on $REMOTE/$BRANCH; publishing it would drop them. Run with --restore before generating reports. (PUBLISH_ALLOW_REWRITE=1 publishes it anyway.)" >&2
+      exit 6
+    fi
+  done
 fi
 tree="$(git write-tree)" || exit 2
 unset GIT_INDEX_FILE

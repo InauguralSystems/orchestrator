@@ -193,3 +193,70 @@ t_health_subsidiary_missing_report_warns() {  # no child report to roll up -> WA
   local out; out="$(runco "$co" health --local 2>&1)"
   assert_contains "a subsidiary with no health report warns" "$out" "no subsidiary health report"
 }
+
+# --- a subsidiary that publishes its reports to a branch ------------------------
+# The child keeps no report files on its default branch, so a parent reading a
+# clone that never ran the child's sweep has nothing on disk. Before this, a
+# published RED read as "no subsidiary health report" and the parent stayed GREEN.
+# _published_child ROOT NAME STATE DATE [yaml] — a child repo whose checkout has
+# no reports/, with origin/daily-reports holding a STATE board dated DATE.
+_published_child() {
+  local root="$1" name="$2" state="$3" date="$4" yaml="${5:-yes}" remote
+  remote="$(mktemp -d)/$name.git"; git init -q --bare -b main "$remote"
+  mkrepo "$root" "$name"
+  [ "$yaml" = yes ] && { echo "reports_branch: daily-reports" > "$root/$name/orchestrator.yaml"; git -C "$root/$name" add -A; git -C "$root/$name" commit -q -m config; }
+  git -C "$root/$name" branch -M main; git -C "$root/$name" remote add origin "$remote"
+  git -C "$root/$name" push -q -u origin main
+  mkdir -p "$root/$name/reports"
+  printf -- '- Active repos: OK=1 WARN=0 FAIL=2 -> **%s**\n' "$state" > "$root/$name/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n%s,1,0,2,%s\n' "$date" "$state" > "$root/$name/reports/history.csv"
+  bash "$PRODUCT/tools/publish_reports.sh" -C "$root/$name" -k reports/history.csv daily-reports reports/latest.md >/dev/null 2>&1
+  rm -rf "$root/$name/reports"                                   # this clone never ran the sweep
+  git -C "$root/$name" branch -q -D daily-reports 2>/dev/null     # and only knows origin's copy
+}
+
+t_health_subsidiary_read_from_its_reports_branch() {
+  local root co out; root="$(mktemp -d)"
+  _published_child "$root" sickco RED "$(date +%F)"
+  assert_ok "fixture: the board is only on origin/daily-reports" \
+    bash -c "[ ! -e '$root/sickco/reports' ] && git -C '$root/sickco' cat-file -e origin/daily-reports:reports/latest.md"
+  co="$(mkcompany "$root" "sickco:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a RED published to the child's reports branch rolls up" "$out" "**RED** — subsidiary roll-up"
+  assert_missing "and is not reported as a missing report" "$out" "no subsidiary health report"
+  assert_ok "the parent exits nonzero" bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
+}
+
+t_health_subsidiary_branch_named_by_the_parent() {
+  # A child that runs its own tooling has no orchestrator.yaml to say where.
+  local root co out; root="$(mktemp -d)"
+  _published_child "$root" owntools RED "$(date +%F)" no
+  co="$(mkcompany "$root" "owntools:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "without the parent's setting the board is not found" "$out" "no subsidiary health report"
+  echo "subsidiary_reports_branch: daily-reports" >> "$co/orchestrator.yaml"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "with it, the RED rolls up" "$out" "**RED** — subsidiary roll-up"
+}
+
+t_health_subsidiary_newer_copy_wins() {
+  local root co out; root="$(mktemp -d)"
+  _published_child "$root" kid GREEN "2026-01-01"
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  # The checkout ran a sweep today whose publish failed: its files are newer.
+  mkdir -p "$root/kid/reports"
+  printf -- '- Active repos: OK=0 WARN=0 FAIL=3 -> **RED**\n' > "$root/kid/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n%s,0,0,3,RED\n' "$(date +%F)" > "$root/kid/reports/history.csv"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "newer checkout files beat an older branch" "$out" "**RED** — subsidiary roll-up"
+  # A leftover file older than the branch must not hide the published verdict.
+  printf -- '- Active repos: OK=3 WARN=0 FAIL=0 -> **GREEN**\n' > "$root/kid/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n2025-12-01,3,0,0,GREEN\n' > "$root/kid/reports/history.csv"
+  local stage; stage="$(mktemp -d)/kid2"; git clone -q "$(git -C "$root/kid" remote get-url origin)" "$stage" 2>/dev/null; _gitinit "$stage"
+  mkdir -p "$stage/reports"; printf -- '- Active repos: OK=0 WARN=0 FAIL=1 -> **RED**\n' > "$stage/reports/latest.md"
+  printf 'date,ok,warn,fail,state\n2026-01-01,1,0,2,GREEN\n%s,0,0,1,RED\n' "$(date +%F)" > "$stage/reports/history.csv"
+  bash "$PRODUCT/tools/publish_reports.sh" -C "$stage" -k reports/history.csv daily-reports reports/latest.md >/dev/null 2>&1
+  git -C "$root/kid" fetch -q origin
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a newer branch beats leftover checkout files" "$out" "**RED** — subsidiary roll-up"
+}

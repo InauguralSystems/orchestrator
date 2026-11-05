@@ -45,3 +45,23 @@ YAML
 }
 
 mkroot_dir() { mktemp -d; }
+
+t_config_list_header_with_inline_comment() {
+  local d; d="$(mktemp -d)"
+  printf 'company: T\nitems:   # a comment on the header\n  - one\n  - two\nnext: x\n' > "$d/orchestrator.yaml"
+  assert_eq "a list under a commented header parses" "$(_load "$d/orchestrator.yaml" '_orch_list items | tr "\n" " "')" "one two "
+  assert_eq "a scalar that merely starts with the name is not a header" \
+    "$(printf 'items: scalar\nother:\n  - x\n' > "$d/orchestrator.yaml"; _load "$d/orchestrator.yaml" '_orch_list items | grep -c .')" "0"
+}
+
+t_config_example_lists_parse_once_uncommented() {
+  # The shipped example is what people copy. Uncomment every "# key:" block in
+  # it and require each documented list to come back with its items.
+  local d; d="$(mktemp -d)"
+  sed -E 's/^# (reports_branch:|reports_publish:|reports_cumulative:|subsidiary_reports_branch:|  - reports\/)/\1/' \
+    "$PRODUCT/orchestrator.example.yaml" > "$d/orchestrator.yaml"
+  assert_eq "example: reports_branch" "$(_load "$d/orchestrator.yaml" 'orch_get reports_branch')" "daily-reports"
+  assert_eq "example: reports_publish items" "$(_load "$d/orchestrator.yaml" '_orch_list reports_publish | tr "\n" " "')" "reports/PROGRESS.md "
+  assert_eq "example: reports_cumulative items" "$(_load "$d/orchestrator.yaml" '_orch_list reports_cumulative | tr "\n" " "')" "reports/runs.csv "
+  assert_eq "example: subsidiary_reports_branch" "$(_load "$d/orchestrator.yaml" 'orch_get subsidiary_reports_branch')" "daily-reports"
+}

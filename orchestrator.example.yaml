@@ -38,9 +38,25 @@ github_org: acme-inc          # GitHub org/owner for CI + backlog signals
 # (.gitignore them) so there is one copy. Never the default branch itself, and
 # not a name other branches use as a prefix: git cannot hold both `reports`
 # and `reports/2026-q3`.
+#
+# The branch then holds the only durable copy of the trend. Each sweep first
+# restores history.csv from it (a fresh clone has none), and refuses to publish
+# a history file that lost published lines.
 # reports_branch: daily-reports
-# reports_publish:            # optional: more files to publish with them
+#
+# Optional: other files under reports/ to publish with them.
+# reports_publish:
 #   - reports/PROGRESS.md
+#
+# Optional: other files under reports/ that only ever grow (a run log, say).
+# They are published, and restored and guarded the same way as history.csv.
+# reports_cumulative:
+#   - reports/runs.csv
+#
+# Optional, in a PARENT company: the branch a subsidiary publishes its reports
+# to, when that subsidiary runs its own tooling. A subsidiary that uses
+# Orchestrator needs nothing here: its own `reports_branch:` is read.
+# subsidiary_reports_branch: daily-reports
 
 # --- Where your code lives ----------------------------------------------
 root: ~/src/acme              # parent dir that holds all the repos below

@@ -19,9 +19,23 @@
 # tree. It uses a private index, so it works from any branch, with a dirty
 # tree, and on files .gitignore excludes.
 #
+# What it refuses, because each is a way to publish the wrong thing or to the
+# wrong place:
+#   - the default branch (main, master, whatever the remote says its default
+#     is, and any name in $PUBLISH_REFUSE); if the default cannot be learned
+#     from the remote or from a cached origin/HEAD, that is a refusal, not a pass
+#   - an existing BRANCH whose tip this script did not make (the tip commit
+#     carries a "Published-By:" trailer): a commit here replaces the whole
+#     tree, so pointing it at a code branch would empty that branch
+#   - a FILE outside reports/, or one reached through a symlink: a link in
+#     reports/ would otherwise publish whatever it points at
+# FILEs are relative to the repository root.
+#
 # Exit 0  published, or nothing changed and nothing was waiting to be pushed
-#      2  usage, or none of the FILEs exist (zero files is never a pass)
-#      3  refused: BRANCH is the default branch, or is checked out here
+#      2  usage, a FILE that is not a plain file under reports/, or none of the
+#         FILEs exist (zero files is never a pass)
+#      3  refused: BRANCH is a default/protected branch, is checked out here,
+#         or exists and is not a reports branch
 #      4  the remote branch has commits this clone does not; never force-pushes
 #      5  committed locally but the push failed; the next run pushes the queue
 set -u
@@ -41,18 +55,28 @@ done
 BRANCH="$1"; shift
 
 cd "$DIR" || exit 2
-git rev-parse --git-dir >/dev/null 2>&1 || { echo "publish_reports: $DIR is not a git repository" >&2; exit 2; }
+TOP="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "publish_reports: $DIR is not inside a git working tree" >&2; exit 2; }
+cd "$TOP" || exit 2
+TOP="$(pwd -P)"
 git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || { echo "publish_reports: '$BRANCH' is not a branch name" >&2; exit 2; }
 
-# Never the default branch. The names are refused outright; the remote's own
-# idea of its default is refused too, so a repo whose default is `trunk` is
-# covered without anyone having to remember this list.
-default="$(git symbolic-ref -q --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null)"; default="${default#"$REMOTE"/}"
-case "$BRANCH" in
-  main|master|"${default:-main}")
-    echo "publish_reports: refusing to publish to '$BRANCH' (a default branch); reports go to a branch of their own" >&2
-    exit 3;;
-esac
+# Never the default branch. Ask the remote what its default is; fall back to
+# the cached origin/HEAD when it cannot be reached. Knowing neither is a
+# refusal: a guard that passes when it could not look is not a guard.
+default="$(git ls-remote --symref "$REMOTE" HEAD 2>/dev/null | awk '$1=="ref:" && $3=="HEAD" {sub("^refs/heads/","",$2); print $2; exit}')"
+if [ -z "$default" ]; then
+  default="$(git symbolic-ref -q --short "refs/remotes/$REMOTE/HEAD" 2>/dev/null)"; default="${default#"$REMOTE"/}"
+fi
+if [ -z "$default" ]; then
+  echo "publish_reports: refusing — cannot learn $REMOTE's default branch (unreachable, and no cached $REMOTE/HEAD), so cannot rule out that '$BRANCH' is it" >&2
+  exit 3
+fi
+for refused in main master "$default" ${PUBLISH_REFUSE:-}; do
+  if [ "$BRANCH" = "$refused" ]; then
+    echo "publish_reports: refusing to publish to '$BRANCH' (a default or protected branch); reports go to a branch of their own" >&2
+    exit 3
+  fi
+done
 # update-ref on a checked-out branch would leave that working tree behind it.
 if [ "$(git branch --show-current 2>/dev/null)" = "$BRANCH" ] ||
    git worktree list --porcelain 2>/dev/null | grep -qxF "branch refs/heads/$BRANCH"; then
@@ -87,6 +111,14 @@ if [ -n "$remote_tip" ]; then
   fi
 fi
 
+# An existing branch must be one this script made. The new commit's tree is
+# only the FILEs, so building on anything else would wipe that branch's content.
+MARK="Published-By: publish_reports.sh"
+if [ -n "$parent" ] && ! git log -1 --format=%B "$parent" | grep -qxF "$MARK"; then
+  echo "publish_reports: refusing — '$BRANCH' exists and its tip $(git rev-parse --short "$parent") was not made by this script (no '$MARK' trailer); it is not a reports branch" >&2
+  exit 3
+fi
+
 # The tree: exactly the FILEs that exist, as they are on disk right now.
 TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "$TMP"' EXIT
@@ -94,7 +126,16 @@ export GIT_INDEX_FILE="$TMP/index"
 git read-tree --empty
 n=0
 for f in "$@"; do
-  case "$f" in /*|../*|*/../*) echo "publish_reports: '$f' is not a path inside the repository" >&2; exit 2;; esac
+  case "$f" in
+    reports/?*) ;;
+    *) echo "publish_reports: '$f' is not under reports/; refusing" >&2; exit 2;;
+  esac
+  # No symlink anywhere on the path, and no "..": the resolved path must be
+  # the literal one. Checked on links that dangle too (-L before -e).
+  if [ -L "$f" ] || { [ -e "$f" ] && [ "$(realpath -e -- "$f" 2>/dev/null)" != "$TOP/$f" ]; }; then
+    echo "publish_reports: '$f' is, or is reached through, a symlink (or is not a normal path); refusing" >&2
+    exit 2
+  fi
   if [ -f "$f" ]; then
     blob="$(git hash-object -w -- "$f")" || exit 2
     git update-index --add --cacheinfo "100644,$blob,$f" || exit 2
@@ -113,8 +154,8 @@ unset GIT_INDEX_FILE
 new="$parent"
 if [ -z "$parent" ] || [ "$tree" != "$(git rev-parse "$parent^{tree}")" ]; then
   [ -n "$MSG" ] || MSG="reports: $(date +%F)"
-  if [ -n "$parent" ]; then new="$(git commit-tree "$tree" -p "$parent" -m "$MSG")"
-  else                      new="$(git commit-tree "$tree" -m "$MSG")"; fi
+  if [ -n "$parent" ]; then new="$(git commit-tree "$tree" -p "$parent" -m "$MSG" -m "$MARK")"
+  else                      new="$(git commit-tree "$tree" -m "$MSG" -m "$MARK")"; fi
   [ -n "$new" ] || { echo "publish_reports: FAILED — could not create the commit (is user.name/user.email set?)" >&2; exit 2; }
 fi
 if [ "$new" != "$local_tip" ]; then

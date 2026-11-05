@@ -26,9 +26,11 @@ if [ -n "$reports_branch" ]; then
   # for a company repo whose default branch is protected: a cron job cannot
   # land there without an admin bypass, and the checkout is usually on a PR
   # branch anyway. publish_reports.sh touches neither the checkout nor its
-  # index. `reports_publish:` in the config adds files to the four below.
+  # index, and refuses the default branch and every `protected_branches:` name.
+  # `reports_publish:` in the config adds files (under reports/) to the four below.
   files=(reports/latest.md reports/history.csv reports/standup_latest.md reports/dashboard.html)
   while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done < <(_orch_list reports_publish)
+  PUBLISH_REFUSE="$(orch_get protected_branches)" \
   bash "$PRODUCT/tools/publish_reports.sh" -m "sweep: daily report $(date +%F) — ${state:-?}" \
       "$reports_branch" "${files[@]}" 2>&1 \
     || echo "ATTENTION: reports were NOT published to '$reports_branch' — see the line above"

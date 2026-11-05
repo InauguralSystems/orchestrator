@@ -184,3 +184,77 @@ t_sweep_without_reports_branch_keeps_the_old_path() {
   assert_eq "the default still commits on the current branch" "$(git -C "$co" log -1 --format=%s | cut -c1-19)" "sweep: daily report"
   assert_eq "and creates no reports branch" "$(git -C "$remote" for-each-ref refs/heads/reports | wc -l | tr -d ' ')" "0"
 }
+
+# --- what it refuses ----------------------------------------------------------
+t_publish_default_guard_does_not_need_a_cached_head() {
+  local work remote rc; read -r work remote < <(_pub_fixture)
+  git -C "$work" push -q origin main:trunk; git -C "$remote" symbolic-ref HEAD refs/heads/trunk
+  git -C "$work" remote set-head origin -d >/dev/null          # no cached origin/HEAD at all
+  bash "$PUB" -C "$work" trunk reports/latest.md >/dev/null 2>&1; rc=$?
+  assert_eq "the default is learned from the remote itself (exit 3)" "$rc" "3"
+  assert_eq "remote trunk did not move" "$(git -C "$remote" rev-list --count trunk)" "1"
+}
+
+t_publish_fails_closed_when_default_is_unknowable() {
+  local work remote rc out; read -r work remote < <(_pub_fixture)
+  git -C "$work" remote set-head origin -d >/dev/null
+  mv "$remote" "$remote.gone"                                   # cannot ask, nothing cached
+  out="$(bash "$PUB" -C "$work" reports reports/latest.md 2>&1)"; rc=$?
+  assert_eq "an unknowable default branch is a refusal (exit 3)" "$rc" "3"
+  assert_contains "and says why" "$out" "cannot learn"
+  assert_eq "no local reports branch was made" "$(git -C "$work" for-each-ref refs/heads/reports | wc -l | tr -d ' ')" "0"
+}
+
+t_publish_refuses_extra_protected_names() {
+  local work remote rc; read -r work remote < <(_pub_fixture)
+  PUBLISH_REFUSE="release staging" bash "$PUB" -C "$work" staging reports/latest.md >/dev/null 2>&1; rc=$?
+  assert_eq "a name in PUBLISH_REFUSE is refused (exit 3)" "$rc" "3"
+  assert_eq "and no such branch was created" "$(git -C "$remote" for-each-ref refs/heads/staging | wc -l | tr -d ' ')" "0"
+}
+
+t_publish_refuses_a_branch_it_did_not_make() {
+  local work remote rc tip out; read -r work remote < <(_pub_fixture)
+  git -C "$work" push -q origin some-pr-branch:feature          # a code branch on the remote
+  tip="$(git -C "$remote" rev-parse feature)"
+  out="$(bash "$PUB" -C "$work" feature reports/latest.md 2>&1)"; rc=$?
+  assert_eq "an existing code branch is refused (exit 3)" "$rc" "3"
+  assert_contains "and says it is not a reports branch" "$out" "not a reports branch"
+  assert_eq "the code branch is untouched" "$(git -C "$remote" rev-parse feature)" "$tip"
+  assert_eq "and still has its code" "$(git -C "$remote" show feature:tracked.txt)" "tracked"
+}
+
+t_publish_refuses_symlinks_and_paths_outside_reports() {
+  local work remote rc secret; read -r work remote < <(_pub_fixture)
+  secret="$(mktemp)"; echo "PRIVATE KEY" > "$secret"
+  ln -s "$secret" "$work/reports/link.md"
+  bash "$PUB" -C "$work" reports reports/latest.md reports/link.md >/dev/null 2>&1; rc=$?
+  assert_eq "a symlinked report file is refused (exit 2)" "$rc" "2"
+  mkdir -p "$work/elsewhere"; echo "PRIVATE KEY" > "$work/elsewhere/s.md"
+  ln -s ../elsewhere "$work/reports/sub"
+  bash "$PUB" -C "$work" reports reports/latest.md reports/sub/s.md >/dev/null 2>&1; rc=$?
+  assert_eq "a file reached through a symlinked directory is refused (exit 2)" "$rc" "2"
+  ln -s /nonexistent "$work/reports/dangling.md"
+  bash "$PUB" -C "$work" reports reports/latest.md reports/dangling.md >/dev/null 2>&1; rc=$?
+  assert_eq "a dangling symlink is refused, not skipped (exit 2)" "$rc" "2"
+  bash "$PUB" -C "$work" reports reports/latest.md tracked.txt >/dev/null 2>&1; rc=$?
+  assert_eq "a file outside reports/ is refused (exit 2)" "$rc" "2"
+  bash "$PUB" -C "$work" reports reports/latest.md reports/../tracked.txt >/dev/null 2>&1; rc=$?
+  assert_eq "a .. path is refused (exit 2)" "$rc" "2"
+  bash "$PUB" -C "$work" reports reports/latest.md "$secret" >/dev/null 2>&1; rc=$?
+  assert_eq "an absolute path is refused (exit 2)" "$rc" "2"
+  assert_eq "none of those runs published anything" "$(git -C "$remote" for-each-ref refs/heads/reports | wc -l | tr -d ' ')" "0"
+}
+
+t_publish_marks_its_commits() {
+  local work remote; read -r work remote < <(_pub_fixture)
+  bash "$PUB" -C "$work" -m "sweep 1" reports reports/latest.md >/dev/null 2>&1
+  assert_eq "the commit carries the reports-branch marker" "$(git -C "$remote" log -1 --format=%B reports | grep -cxF 'Published-By: publish_reports.sh')" "1"
+}
+
+t_sweep_refuses_a_protected_branch_from_config() {
+  local co remote out; read -r co remote < <(_sweep_fixture)
+  { echo "protected_branches: main release"; echo "reports_branch: release"; } >> "$co/orchestrator.yaml"
+  out="$(runco "$co" sweep 2>&1)"
+  assert_contains "a protected_branches name is refused by the sweep" "$out" "ATTENTION: reports were NOT published"
+  assert_eq "and no such branch was created" "$(git -C "$remote" for-each-ref refs/heads/release | wc -l | tr -d ' ')" "0"
+}

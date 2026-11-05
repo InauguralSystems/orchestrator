@@ -20,11 +20,28 @@ bash "$PRODUCT/tools/dashboard.sh" > /dev/null 2>&1
 state=$(tail -1 reports/history.csv 2>/dev/null | awk -F, '{print $NF}')
 echo "health: ${state:-?} (exit $health_rc); reports updated"
 
-# Commit only report artifacts — never sweep up unrelated working changes.
-git add reports/ >/dev/null 2>&1
-if ! git diff --cached --quiet -- reports/ 2>/dev/null; then
-  git commit -q -m "sweep: daily report $(date +%F) — ${state:-?}" -- reports/ 2>/dev/null
-  git push -q 2>/dev/null || echo "push failed (offline?) — will ride along with the next push"
+reports_branch="$(orch_get reports_branch)"
+if [ -n "$reports_branch" ]; then
+  # Publish the generated reports to a branch of their own. This is the mode
+  # for a company repo whose default branch is protected: a cron job cannot
+  # land there without an admin bypass, and the checkout is usually on a PR
+  # branch anyway. publish_reports.sh touches neither the checkout nor its
+  # index. `reports_publish:` in the config adds files to the four below.
+  files=(reports/latest.md reports/history.csv reports/standup_latest.md reports/dashboard.html)
+  while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done < <(_orch_list reports_publish)
+  bash "$PRODUCT/tools/publish_reports.sh" -m "sweep: daily report $(date +%F) — ${state:-?}" \
+      "$reports_branch" "${files[@]}" 2>&1 \
+    || echo "ATTENTION: reports were NOT published to '$reports_branch' — see the line above"
+else
+  # Default: commit only report artifacts on the current branch and push it.
+  # Never sweeps up unrelated working changes. Under branch protection set
+  # `reports_branch:` instead; this path then pushes to whatever branch the
+  # checkout happens to be on.
+  git add reports/ >/dev/null 2>&1
+  if ! git diff --cached --quiet -- reports/ 2>/dev/null; then
+    git commit -q -m "sweep: daily report $(date +%F) — ${state:-?}" -- reports/ 2>/dev/null
+    git push -q 2>/dev/null || echo "push failed (offline?) — will ride along with the next push"
+  fi
 fi
 
 if [ "$health_rc" -ne 0 ]; then

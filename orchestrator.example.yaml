@@ -29,6 +29,17 @@ perf_lower_is_better: true    # true for time/latency, false for throughput
 github_org: acme-inc          # GitHub org/owner for CI + backlog signals
                               # (leave blank to derive from each repo's git remote)
 
+# --- Where the daily sweep's reports go ----------------------------------
+# Unset (the default): the sweep commits reports/ on the current branch and
+# pushes it. Set this when the company repo's default branch is protected: the
+# sweep then publishes latest.md, history.csv, standup_latest.md and
+# dashboard.html to this branch instead, without touching the checkout, and you
+# read the board there. Stop tracking those files on the default branch
+# (.gitignore them) so there is one copy. Never the default branch itself.
+# reports_branch: reports
+# reports_publish:            # optional: more files to publish with them
+#   - reports/PROGRESS.md
+
 # --- Where your code lives ----------------------------------------------
 root: ~/src/acme              # parent dir that holds all the repos below
                               # (siblings of your company repo)

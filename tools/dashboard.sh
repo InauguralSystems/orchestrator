@@ -14,6 +14,8 @@ ROOT="$(orch_expand "$(orch_get root)")"
 COMPANY="$(orch_get company Company)"
 mkdir -p "$ORCH_HOME/reports"
 OUT="$ORCH_HOME/reports/dashboard.html"
+SUBTMP="$(mktemp -d)" || exit 1          # subsidiary reports read from a branch land here
+trap 'rm -rf "$SUBTMP"' EXIT
 
 _esc() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
 
@@ -252,7 +254,7 @@ EOF
     [ -n "$entry" ] || continue
     repo="${entry%%:*}"; cat="${entry##*:}"
     [ "$cat" = "subsidiary" ] || continue
-    _section "Subsidiary — $repo" "$ROOT/$repo/reports"
+    _section "Subsidiary — $repo" "$(orch_sub_reports "$ROOT/$repo" "$SUBTMP")"
   done <<< "$(orch_repos)"
 
   echo "</main>"

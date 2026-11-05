@@ -10,7 +10,31 @@ PRODUCT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ORCH_HOME" || exit 1
 mkdir -p reports
 
+# Publishing to a branch (`reports_branch:`): the branch holds the only durable
+# copy of the files that keep history, so bring the local ones up to date
+# BEFORE health appends today's row. A fresh clone, or a pull that deleted the
+# formerly tracked copies, would otherwise start a new history.csv and publish
+# one row over the whole trend. history.csv always keeps history;
+# `reports_cumulative:` names any others (they are published too).
+#
+# This runs before the first line of output, and its own output is held until
+# after the heading. The sweep log (this script's output, appended by cron) may
+# itself be one of those files; restored while still empty, nothing has to be
+# told apart from the published lines by its text.
+reports_branch="$(orch_get reports_branch)"
+keep=(-k reports/history.csv)
+while IFS= read -r f; do [ -n "$f" ] && keep+=(-k "$f"); done < <(_orch_list reports_cumulative)
+restore_out=""; restore_rc=0
+if [ -n "$reports_branch" ]; then
+  restore_out="$(PUBLISH_REFUSE="$(orch_get protected_branches)" \
+    bash "$PRODUCT/tools/publish_reports.sh" --restore "${keep[@]}" "$reports_branch" 2>&1)"
+  restore_rc=$?
+fi
+
 echo "=== sweep $(date '+%F %T') ==="
+[ -n "$restore_out" ] && echo "$restore_out"
+[ "$restore_rc" -eq 0 ] \
+  || echo "ATTENTION: could not bring the history files up to date from '$reports_branch' — see the line above"
 
 bash "$PRODUCT/tools/health.sh" > /dev/null 2>&1
 health_rc=$?
@@ -20,11 +44,30 @@ bash "$PRODUCT/tools/dashboard.sh" > /dev/null 2>&1
 state=$(tail -1 reports/history.csv 2>/dev/null | awk -F, '{print $NF}')
 echo "health: ${state:-?} (exit $health_rc); reports updated"
 
-# Commit only report artifacts — never sweep up unrelated working changes.
-git add reports/ >/dev/null 2>&1
-if ! git diff --cached --quiet -- reports/ 2>/dev/null; then
-  git commit -q -m "sweep: daily report $(date +%F) — ${state:-?}" -- reports/ 2>/dev/null
-  git push -q 2>/dev/null || echo "push failed (offline?) — will ride along with the next push"
+if [ -n "$reports_branch" ]; then
+  # Publish the generated reports to a branch of their own. This is the mode
+  # for a company repo whose default branch is protected: a cron job cannot
+  # land there without an admin bypass, and the checkout is usually on a PR
+  # branch anyway. publish_reports.sh touches neither the checkout nor its
+  # index, refuses the default branch and every `protected_branches:` name, and
+  # refuses to publish a history file that lost published lines.
+  # `reports_publish:` in the config adds snapshot files (under reports/).
+  files=(reports/latest.md reports/standup_latest.md reports/dashboard.html)
+  while IFS= read -r f; do [ -n "$f" ] && files+=("$f"); done < <(_orch_list reports_publish)
+  PUBLISH_REFUSE="$(orch_get protected_branches)" \
+  bash "$PRODUCT/tools/publish_reports.sh" -m "sweep: daily report $(date +%F) — ${state:-?}" \
+      "${keep[@]}" "$reports_branch" "${files[@]}" 2>&1 \
+    || echo "ATTENTION: reports were NOT published to '$reports_branch' — see the line above"
+else
+  # Default: commit only report artifacts on the current branch and push it.
+  # Never sweeps up unrelated working changes. Under branch protection set
+  # `reports_branch:` instead; this path then pushes to whatever branch the
+  # checkout happens to be on.
+  git add reports/ >/dev/null 2>&1
+  if ! git diff --cached --quiet -- reports/ 2>/dev/null; then
+    git commit -q -m "sweep: daily report $(date +%F) — ${state:-?}" -- reports/ 2>/dev/null
+    git push -q 2>/dev/null || echo "push failed (offline?) — will ride along with the next push"
+  fi
 fi
 
 if [ "$health_rc" -ne 0 ]; then

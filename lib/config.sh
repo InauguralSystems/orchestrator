@@ -50,12 +50,81 @@ orch_get() {
 # _orch_list SECTION — emit each "- item" under a top-level "section:" block
 _orch_list() {
   awk -v s="$1" '
-    $0 ~ "^"s":[ \t]*$" { inb=1; next }
+    $0 ~ "^"s":[ \t]*(#.*)?$" { inb=1; next }
+    # ^ the header may carry a comment ("reports_publish:   # optional"); a
+    #   header the parser did not recognise used to drop the whole list silently.
     inb && /^[A-Za-z0-9_]+:/ { inb=0 }
     inb && /^[ \t]*-[ \t]*/ { l=$0; sub(/^[ \t]*-[ \t]*/,"",l); sub(/[ \t]+#.*/,"",l); sub(/^#.*/,"",l); sub(/[ \t]+$/,"",l); if (l!="") print l }
     # ^ list items strip inline comments too (G1): the same whitespace-preceded
     #   rule as scalars, plus a comment-only "- # ..." line drops to empty.
   ' "$ORCH_CONFIG"
+}
+
+# orch_sub_reports DIR TMP — the directory to read a subsidiary's reports from.
+# A child that publishes its reports to a branch (`reports_branch:` in ITS
+# orchestrator.yaml, or `subsidiary_reports_branch:` in ours for a child that
+# runs its own tooling) keeps no report files on its default branch, so a clone
+# that never ran the child's sweep has nothing on disk. There can be two
+# copies, the checkout's files and the branch's (extracted under TMP), and the
+# newer one must be read: the older one can say GREEN while the newer says RED.
+#
+# Which branch tip: the local branch and origin's can differ (a publish queued
+# here, or one fetched from elsewhere). The one that descends from the other is
+# newer. Commit times do not decide that; two publishes in one second tie. Only
+# when the tips have diverged does the later commit time win, origin on a tie.
+#
+# Which copy, checkout or branch: history.csv only ever grows, so it orders
+# them exactly. If one copy's history is the start of the other's, the longer
+# one has seen more sweeps and is newer (the same history: the branch, the
+# published copy). Dates cannot do this; two sweeps in one day tie.
+# If neither history is the start of the other (two machines, unrelated
+# files), the later last date wins, and when the dates tie too the copies
+# cannot be ordered: the worse verdict is read, RED over YELLOW over GREEN,
+# because a known failure is never hidden.
+_orch_is_prefix() { # the bytes of file A are the start of file B
+  local n; n="$(wc -c < "$1" | tr -d ' ')"
+  [ "$n" -eq 0 ] && return 0
+  [ "$n" -le "$(wc -c < "$2" | tr -d ' ')" ] && cmp -s -n "$n" "$1" "$2"
+}
+_orch_verdict_rank() { # FILE -> 3 RED, 2 YELLOW, 1 GREEN, 0 none
+  case "$(grep -oE 'GREEN|YELLOW|RED' "$1" 2>/dev/null | tail -1)" in RED) echo 3;; YELLOW) echo 2;; GREEN) echo 1;; *) echo 0;; esac
+}
+# _orch_subgit ARGS — read-only git in the subsidiary's checkout ($dir of the caller),
+# without running anything its config names (the same care health.sh takes).
+_orch_subgit() { git -C "$dir" -c core.fsmonitor= -c core.hooksPath=/dev/null --no-optional-locks "$@"; }
+orch_sub_reports() {
+  local dir="$1" tmp="$2" b="" sha="" l r out f disk d_disk d_br
+  disk="$dir/reports"
+  [ -f "$dir/orchestrator.yaml" ] && b="$(ORCH_CONFIG="$dir/orchestrator.yaml"; orch_get reports_branch)"
+  [ -n "$b" ] || b="$(orch_get subsidiary_reports_branch)"
+  if [ -z "$b" ] || ! git check-ref-format --branch "$b" >/dev/null 2>&1; then printf '%s\n' "$disk"; return; fi
+  l="$(_orch_subgit rev-parse -q --verify "refs/heads/$b^{commit}" 2>/dev/null)"
+  r="$(_orch_subgit rev-parse -q --verify "refs/remotes/origin/$b^{commit}" 2>/dev/null)"
+  if   [ -z "$l" ]; then sha="$r"
+  elif [ -z "$r" ] || [ "$l" = "$r" ]; then sha="$l"
+  elif _orch_subgit merge-base --is-ancestor "$l" "$r" 2>/dev/null; then sha="$r"
+  elif _orch_subgit merge-base --is-ancestor "$r" "$l" 2>/dev/null; then sha="$l"
+  elif [ "$(_orch_subgit log -1 --format=%ct "$l" 2>/dev/null || echo 0)" -gt "$(_orch_subgit log -1 --format=%ct "$r" 2>/dev/null || echo 0)" ]; then sha="$l"
+  else sha="$r"; fi
+  if [ -z "$sha" ] || ! _orch_subgit cat-file -e "$sha:reports/latest.md" 2>/dev/null; then printf '%s\n' "$disk"; return; fi
+  out="$tmp/$(basename "$dir")"; rm -rf "$out"; mkdir -p "$out" || { printf '%s\n' "$disk"; return; }
+  for f in latest.md history.csv standup_latest.md; do
+    _orch_subgit cat-file -e "$sha:reports/$f" 2>/dev/null && _orch_subgit cat-file blob "$sha:reports/$f" > "$out/$f"
+  done
+  [ -f "$disk/latest.md" ] || { printf '%s\n' "$out"; return; }
+  # Both copies exist. Order them by history.
+  if [ -f "$disk/history.csv" ] && [ -f "$out/history.csv" ]; then
+    if _orch_is_prefix "$disk/history.csv" "$out/history.csv"; then printf '%s\n' "$out"; return; fi   # same, or branch longer
+    if _orch_is_prefix "$out/history.csv" "$disk/history.csv"; then printf '%s\n' "$disk"; return; fi  # checkout longer
+  elif [ -f "$out/history.csv" ]; then printf '%s\n' "$out"; return
+  elif [ -f "$disk/history.csv" ]; then printf '%s\n' "$disk"; return
+  fi
+  d_disk="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$disk/history.csv" 2>/dev/null | tail -1)"
+  d_br="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$out/history.csv" 2>/dev/null | tail -1)"
+  if   [ "$d_disk" \> "$d_br" ]; then printf '%s\n' "$disk"     # ISO dates order as strings
+  elif [ "$d_disk" \< "$d_br" ]; then printf '%s\n' "$out"
+  elif [ "$(_orch_verdict_rank "$disk/latest.md")" -gt "$(_orch_verdict_rank "$out/latest.md")" ]; then printf '%s\n' "$disk"
+  else printf '%s\n' "$out"; fi
 }
 
 orch_repos()  { _orch_list repos; }   # each line: name:category

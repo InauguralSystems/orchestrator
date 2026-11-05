@@ -23,6 +23,8 @@ LIVE_SKILLS="$(orch_expand "$(orch_get live_skills "$HOME/.claude/skills")")"
 SKILLS_DIR="$ORCH_HOME/$(orch_get skills_dir skills)"
 
 mkdir -p "$ORCH_HOME/reports"
+SUBTMP="$(mktemp -d)" || exit 1          # subsidiary reports read from a branch land here
+trap 'rm -rf "$SUBTMP"' EXIT
 REPORT="$ORCH_HOME/reports/latest.md"
 HISTORY="$ORCH_HOME/reports/history.csv"
 
@@ -152,7 +154,10 @@ while IFS= read -r entry; do
     # Missing/unreadable report -> WARN. The child's summary line is the only
     # place GREEN|YELLOW|RED appears (row statuses use OK/WARN/FAIL/parked), so
     # the last match on the file is its rolled-up verdict.
-    sub_state="$(grep -oE 'GREEN|YELLOW|RED' "$dir/reports/latest.md" 2>/dev/null | tail -1)"
+    # Read it from wherever the child keeps it: its checkout, or the branch it
+    # publishes reports to (orch_sub_reports picks the newer copy).
+    sub_reports="$(orch_sub_reports "$dir" "$SUBTMP")"
+    sub_state="$(grep -oE 'GREEN|YELLOW|RED' "$sub_reports/latest.md" 2>/dev/null | tail -1)"
     case "$sub_state" in
       GREEN)  status="GREEN";  why="subsidiary roll-up";          ok=$((ok+1));;
       YELLOW) status="YELLOW"; why="subsidiary roll-up";          warn=$((warn+1));;
@@ -165,7 +170,7 @@ while IFS= read -r entry; do
     # history.csv. A stale GREEN drops to WARN; a stale YELLOW is already WARN; a
     # stale RED stays RED (never hide a known failure). No date -> skip (trust).
     if [ -n "$sub_state" ]; then
-      sub_date="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$dir/reports/history.csv" 2>/dev/null | tail -1)"
+      sub_date="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$sub_reports/history.csv" 2>/dev/null | tail -1)"
       sub_age="$(_days_since "$sub_date")"
       if [ -n "$sub_age" ] && [ "$sub_age" -gt "${ORCH_SUBSIDIARY_STALE_DAYS:-7}" ]; then
         why="subsidiary report ${sub_age}d stale (>${ORCH_SUBSIDIARY_STALE_DAYS:-7}d); last verdict $sub_state"
@@ -181,7 +186,7 @@ while IFS= read -r entry; do
     # verdict stays RED and health still exits 1 either way.
     if [ "$sub_state" = "RED" ] && [ -d "$dir/.git" ]; then
       sub_work="$(gitro -C "$dir" log --oneline --since='7 days ago' -- . ':(exclude)reports' 2>/dev/null | wc -l | tr -d ' ')"
-      red_run="$(awk -F, 'NR>1 { if ($NF=="RED") n++; else n=0 } END {print n+0}' "$dir/reports/history.csv" 2>/dev/null)"
+      red_run="$(awk -F, 'NR>1 { if ($NF=="RED") n++; else n=0 } END {print n+0}' "$sub_reports/history.csv" 2>/dev/null)"
       run_note=""; [ "${red_run:-0}" -gt 0 ] 2>/dev/null && run_note=", RED ${red_run}d running"
       if [ "${sub_work:-0}" -gt 0 ] 2>/dev/null; then
         why="$why (in motion: ${sub_work} non-report commits 7d${run_note})"

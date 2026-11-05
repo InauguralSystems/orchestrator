@@ -223,6 +223,9 @@ if [ "$RESTORE" -eq 1 ]; then
       # is left of the local copy after dropping its common start with the
       # published one (a CSV header, or history both sides share) and then the
       # longest run that the published copy ends with and the rest starts with.
+      # Lines are compared as text: a local line identical to the published
+      # line in the same position counts as that line. So restore a log BEFORE
+      # the run writes to it (an empty file takes the branch above, no guess).
       awk -v pf="$TMP/pub" '
         BEGIN { while ((getline line < pf) > 0) P[++np] = line }
         { L[++nl] = $0 }

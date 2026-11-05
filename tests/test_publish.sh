@@ -465,6 +465,27 @@ t_sweep_from_a_fresh_clone_keeps_the_trend() {
     "$(git -C "$remote" show reports:reports/runs.csv 2>/dev/null | tr '\n' ' ')" "run,ok 1,yes "
 }
 
+t_sweep_log_as_a_cumulative_file_survives_a_fresh_clone() {
+  # A company may publish its own sweep log. Cron appends the sweep's output to
+  # it while the sweep restores it, and with the clock frozen every run logs the
+  # same heading: this run's lines cannot be told from published ones by text.
+  local co remote fresh frozen was; read -r co remote < <(_sweep_fixture_on_main)
+  echo "  - reports/sweep.log" >> "$co/orchestrator.yaml"
+  git -C "$co" add -A; git -C "$co" commit -q -m "publish the sweep log"; git -C "$co" push -q origin HEAD:main
+  frozen="$(mktemp -d)"
+  printf '#!/bin/sh\ncase "$*" in *%%T*) echo "2026-01-01 08:23:00";; *) echo "2026-01-01";; esac\n' > "$frozen/date"; chmod +x "$frozen/date"
+  _cron() { mkdir -p "$1/reports"; ( cd "$1" && PATH="$frozen:$PATH" "$ORCH_BIN" sweep >> reports/sweep.log 2>&1 ); }
+  _cron "$co"; _cron "$co"
+  assert_eq "fixture: both runs are in the published log" "$(git -C "$remote" show reports:reports/sweep.log | grep -c '^=== sweep')" "2"
+  was="$(mktemp)"; git -C "$remote" show reports:reports/sweep.log > "$was"
+  fresh="$(_fresh_clone "$remote")"
+  _cron "$fresh"
+  assert_eq "the log kept the two older runs and gained this one" "$(git -C "$remote" show reports:reports/sweep.log | grep -c '^=== sweep')" "3"
+  assert_ok "the log as it was published before is intact at the start of the new one" \
+    bash -c 'git -C "$1" show reports:reports/sweep.log | head -c "$(wc -c < "$2")" | cmp -s - "$2"' _ "$remote" "$was"
+  assert_eq "and the trend has all three rows" "$(git -C "$remote" show reports:reports/history.csv | wc -l | tr -d ' ')" "4"
+}
+
 t_sweep_after_the_pull_that_untracks_the_reports() {
   # The migration itself: reports tracked on main, then the commit that
   # untracks them arrives by pull and git deletes the local copies.

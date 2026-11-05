@@ -24,6 +24,8 @@
 #   - the default branch (main, master, whatever the remote says its default
 #     is, and any name in $PUBLISH_REFUSE); if the default cannot be learned
 #     from the remote or from a cached origin/HEAD, that is a refusal, not a pass
+#   - a BRANCH that other branches use as a prefix (`reports` when
+#     `reports/2026-q3` exists): git cannot hold both
 #   - an existing BRANCH whose tip this script did not make (the tip commit
 #     carries a "Published-By:" trailer): a commit here replaces the whole
 #     tree, so pointing it at a code branch would empty that branch
@@ -77,6 +79,14 @@ for refused in main master "$default" ${PUBLISH_REFUSE:-}; do
     exit 3
   fi
 done
+# git cannot hold both `reports` and `reports/2026-q3`: a branch name is a path.
+# Say so here; the raw error ("cannot lock ref") comes later and explains nothing.
+clash="$( { git for-each-ref --format='%(refname:short)' "refs/heads/$BRANCH/"
+            git ls-remote --heads "$REMOTE" "refs/heads/$BRANCH/*" 2>/dev/null | sed 's#^.*refs/heads/##'; } | sort -u | head -3 | tr '\n' ' ')"
+if [ -n "$clash" ]; then
+  echo "publish_reports: refusing — branches already exist under '$BRANCH/' (${clash% }), so a branch named '$BRANCH' cannot be created. Pick a name nothing uses as a prefix." >&2
+  exit 3
+fi
 # update-ref on a checked-out branch would leave that working tree behind it.
 if [ "$(git branch --show-current 2>/dev/null)" = "$BRANCH" ] ||
    git worktree list --porcelain 2>/dev/null | grep -qxF "branch refs/heads/$BRANCH"; then

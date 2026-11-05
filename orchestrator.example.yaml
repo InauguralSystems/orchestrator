@@ -35,8 +35,10 @@ github_org: acme-inc          # GitHub org/owner for CI + backlog signals
 # sweep then publishes latest.md, history.csv, standup_latest.md and
 # dashboard.html to this branch instead, without touching the checkout, and you
 # read the board there. Stop tracking those files on the default branch
-# (.gitignore them) so there is one copy. Never the default branch itself.
-# reports_branch: reports
+# (.gitignore them) so there is one copy. Never the default branch itself, and
+# not a name other branches use as a prefix: git cannot hold both `reports`
+# and `reports/2026-q3`.
+# reports_branch: daily-reports
 # reports_publish:            # optional: more files to publish with them
 #   - reports/PROGRESS.md
 

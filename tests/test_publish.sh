@@ -258,3 +258,17 @@ t_sweep_refuses_a_protected_branch_from_config() {
   assert_contains "a protected_branches name is refused by the sweep" "$out" "ATTENTION: reports were NOT published"
   assert_eq "and no such branch was created" "$(git -C "$remote" for-each-ref refs/heads/release | wc -l | tr -d ' ')" "0"
 }
+
+t_publish_refuses_a_name_used_as_a_prefix() {
+  local work remote rc out; read -r work remote < <(_pub_fixture)
+  git -C "$work" push -q origin some-pr-branch:reports/regen-2026-q3    # on the remote only
+  out="$(bash "$PUB" -C "$work" reports reports/latest.md 2>&1)"; rc=$?
+  assert_eq "a name the remote uses as a prefix is refused (exit 3)" "$rc" "3"
+  assert_contains "and names the branch in the way" "$out" "reports/regen-2026-q3"
+  git -C "$work" push -q origin :reports/regen-2026-q3
+  git -C "$work" branch -q reports/local-only                           # in this clone only
+  out="$(bash "$PUB" -C "$work" reports reports/latest.md 2>&1)"; rc=$?
+  assert_eq "so is one this clone uses as a prefix (exit 3)" "$rc" "3"
+  assert_contains "and names it" "$out" "reports/local-only"
+  assert_eq "nothing was published either time" "$(git -C "$remote" for-each-ref refs/heads/reports | wc -l | tr -d ' ')" "0"
+}

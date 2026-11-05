@@ -56,6 +56,9 @@ github_org: acme-inc          # GitHub org/owner for CI + backlog signals
 # Optional, in a PARENT company: the branch a subsidiary publishes its reports
 # to, when that subsidiary runs its own tooling. A subsidiary that uses
 # Orchestrator needs nothing here: its own `reports_branch:` is read.
+# Either way health reads the newer of the subsidiary's checkout and its branch,
+# ordered by history.csv (it only grows); two copies it cannot order read as
+# the worse verdict, so a failure is never hidden behind an older GREEN.
 # subsidiary_reports_branch: daily-reports
 
 # --- Where your code lives ----------------------------------------------

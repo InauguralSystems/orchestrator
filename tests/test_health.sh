@@ -260,3 +260,122 @@ t_health_subsidiary_newer_copy_wins() {
   out="$(runco "$co" health --local 2>&1)"
   assert_contains "a newer branch beats leftover checkout files" "$out" "**RED** — subsidiary roll-up"
 }
+
+# --- which copy of a subsidiary's board is newer --------------------------------
+# Found in review: dates alone cannot order two boards from the same day, and
+# commit timestamps cannot order two branch tips made in the same second. In
+# both cases the parent showed GREEN while a newer published board was RED.
+# _board DIR STATE ROWS... — write latest.md (STATE) and history.csv (header + ROWS) in DIR/reports
+_board() {
+  local d="$1" st="$2"; shift 2; mkdir -p "$d/reports"
+  printf -- '- Active repos: OK=1 WARN=0 FAIL=0 -> **%s**\n' "$st" > "$d/reports/latest.md"
+  { echo "date,ok,warn,fail,state"; printf '%s\n' "$@"; } > "$d/reports/history.csv"
+}
+_pub_board() { bash "$PRODUCT/tools/publish_reports.sh" -C "$1" -k reports/history.csv daily-reports reports/latest.md >/dev/null 2>&1; }
+# A child with config and an origin, nothing published. Echoes nothing; $root/$name is the checkout.
+_child_with_origin() {
+  local root="$1" name="$2" remote; remote="$(mktemp -d)/$name.git"; git init -q --bare -b main "$remote"
+  mkrepo "$root" "$name"; echo "reports_branch: daily-reports" > "$root/$name/orchestrator.yaml"
+  git -C "$root/$name" add -A; git -C "$root/$name" commit -q -m config
+  git -C "$root/$name" branch -M main; git -C "$root/$name" remote add origin "$remote"; git -C "$root/$name" push -q -u origin main
+}
+
+t_health_subsidiary_same_day_newer_published_red_is_not_hidden() {
+  local root co out today other; root="$(mktemp -d)"; today="$(date +%F)"
+  _child_with_origin "$root" kid
+  # This checkout swept this morning: GREEN, published.
+  _board "$root/kid" GREEN "$today,1,0,0,GREEN"; _pub_board "$root/kid"
+  # Another machine swept later the same day: RED, published on top.
+  other="$(mktemp -d)/other"; git clone -q "$(git -C "$root/kid" remote get-url origin)" "$other" 2>/dev/null; _gitinit "$other"
+  _board "$other" RED "$today,1,0,0,GREEN" "$today,0,0,1,RED"; _pub_board "$other"
+  git -C "$root/kid" fetch -q origin
+  assert_eq "fixture: the checkout still says GREEN" "$(grep -oE 'GREEN|RED' "$root/kid/reports/latest.md" | tail -1)" "GREEN"
+  assert_eq "fixture: the published board says RED" "$(git -C "$root/kid" show origin/daily-reports:reports/latest.md | grep -oE 'GREEN|RED' | tail -1)" "RED"
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a later same-day RED on the branch beats the checkout's GREEN" "$out" "**RED** — subsidiary roll-up"
+  assert_ok "and the parent exits nonzero" bash -c "cd '$co' && '$ORCH_BIN' health --local >/dev/null 2>&1; [ \$? -eq 1 ]"
+  # Later still, the other machine publishes the fix. The checkout is now the
+  # stale RED one: order comes from the history, not from which verdict is worse.
+  _board "$root/kid" RED "$today,1,0,0,GREEN" "$today,0,0,1,RED"
+  _board "$other" GREEN "$today,1,0,0,GREEN" "$today,0,0,1,RED" "$today,2,0,0,GREEN"; _pub_board "$other"
+  git -C "$root/kid" fetch -q origin
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a later same-day GREEN on the branch beats the checkout's stale RED" "$out" "**GREEN** — subsidiary roll-up"
+}
+
+t_health_subsidiary_same_day_checkout_ahead_of_branch_wins() {
+  # The mirror case: this checkout swept again and its publish failed. Its
+  # history extends the published one, so it is the newer board.
+  local root co out today; root="$(mktemp -d)"; today="$(date +%F)"
+  _child_with_origin "$root" kid
+  _board "$root/kid" RED "$today,0,0,1,RED"; _pub_board "$root/kid"
+  _board "$root/kid" GREEN "$today,0,0,1,RED" "$today,1,0,0,GREEN"          # fixed, not yet published
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "a checkout whose history extends the branch's is the newer board" "$out" "**GREEN** — subsidiary roll-up"
+}
+
+t_health_subsidiary_unorderable_same_day_shows_the_failure() {
+  # Two boards from the same day with unrelated histories cannot be ordered.
+  # Then the failing one is shown: a known failure is never hidden.
+  local root co out today other; root="$(mktemp -d)"; today="$(date +%F)"
+  _child_with_origin "$root" kid
+  other="$(mktemp -d)/other"; git clone -q "$(git -C "$root/kid" remote get-url origin)" "$other" 2>/dev/null; _gitinit "$other"
+  _board "$other" RED "$today,0,0,1,RED"; _pub_board "$other"
+  git -C "$root/kid" fetch -q origin
+  _board "$root/kid" GREEN "$today,1,0,0,GREEN"
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "branch RED vs checkout GREEN, same day, unrelated: RED" "$out" "**RED** — subsidiary roll-up"
+  # And the other way round.
+  _board "$root/kid" RED "$today,0,0,2,RED"
+  _board "$other" GREEN "$today,0,0,1,RED" "$today,3,0,0,GREEN"; _pub_board "$other"
+  git -C "$root/kid" fetch -q origin
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "checkout RED vs branch GREEN, same day, unrelated: RED" "$out" "**RED** — subsidiary roll-up"
+}
+
+t_health_subsidiary_descendant_tip_wins_a_timestamp_tie() {
+  # Local branch tip and origin's tip made in the same second; origin's is the
+  # descendant. Sorting by commit time cannot tell them apart.
+  local root co out today other when; root="$(mktemp -d)"; today="$(date +%F)"; when="2026-01-02T08:23:00Z"
+  _child_with_origin "$root" kid
+  _board "$root/kid" GREEN "2026-01-02,1,0,0,GREEN"
+  GIT_COMMITTER_DATE="$when" GIT_AUTHOR_DATE="$when" _pub_board "$root/kid"       # local tip == origin tip
+  other="$(mktemp -d)/other"; git clone -q "$(git -C "$root/kid" remote get-url origin)" "$other" 2>/dev/null; _gitinit "$other"
+  _board "$other" RED "2026-01-02,1,0,0,GREEN" "$today,0,0,1,RED"
+  GIT_COMMITTER_DATE="$when" GIT_AUTHOR_DATE="$when" _pub_board "$other"           # descendant, same second
+  git -C "$root/kid" fetch -q origin
+  rm -rf "$root/kid/reports"                                                       # only the branch copies remain
+  assert_eq "fixture: the two tips differ" "$([ "$(git -C "$root/kid" rev-parse daily-reports)" != "$(git -C "$root/kid" rev-parse origin/daily-reports)" ] && echo yes)" "yes"
+  assert_eq "fixture: and carry the same commit time" "$(git -C "$root/kid" log -1 --format=%ct daily-reports)" "$(git -C "$root/kid" log -1 --format=%ct origin/daily-reports)"
+  assert_ok "fixture: origin's tip descends from the local one" git -C "$root/kid" merge-base --is-ancestor daily-reports origin/daily-reports
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "the descendant tip is read, whichever ref holds it" "$out" "**RED** — subsidiary roll-up"
+  # Mirror: the LOCAL tip is the descendant (a publish queued, not yet pushed).
+  git -C "$root/kid" update-ref refs/remotes/origin/daily-reports "$(git -C "$root/kid" rev-parse daily-reports)"
+  git -C "$root/kid" update-ref refs/heads/daily-reports "$(git -C "$other" rev-parse daily-reports)"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "and the same when the local ref holds the descendant" "$out" "**RED** — subsidiary roll-up"
+}
+
+t_health_subsidiary_descendant_tip_wins_against_a_skewed_clock() {
+  # The older tip was committed by a machine whose clock runs ahead, so its
+  # commit time is LATER than its descendant's. Ancestry, not time, decides.
+  local root co out today other; root="$(mktemp -d)"; today="$(date +%F)"
+  _child_with_origin "$root" kid
+  _board "$root/kid" GREEN "2026-01-02,1,0,0,GREEN"
+  GIT_COMMITTER_DATE="2026-01-02T09:00:00Z" GIT_AUTHOR_DATE="2026-01-02T09:00:00Z" _pub_board "$root/kid"
+  other="$(mktemp -d)/other"; git clone -q "$(git -C "$root/kid" remote get-url origin)" "$other" 2>/dev/null; _gitinit "$other"
+  _board "$other" RED "2026-01-02,1,0,0,GREEN" "$today,0,0,1,RED"
+  GIT_COMMITTER_DATE="2026-01-02T08:00:00Z" GIT_AUTHOR_DATE="2026-01-02T08:00:00Z" _pub_board "$other"
+  git -C "$root/kid" fetch -q origin; rm -rf "$root/kid/reports"
+  assert_ok "fixture: origin's tip descends from the local one" git -C "$root/kid" merge-base --is-ancestor daily-reports origin/daily-reports
+  assert_eq "fixture: yet the local tip has the later commit time" \
+    "$([ "$(git -C "$root/kid" log -1 --format=%ct daily-reports)" -gt "$(git -C "$root/kid" log -1 --format=%ct origin/daily-reports)" ] && echo yes)" "yes"
+  co="$(mkcompany "$root" "kid:subsidiary")"
+  out="$(runco "$co" health --local 2>&1)"
+  assert_contains "the descendant is read although its commit time is earlier" "$out" "**RED** — subsidiary roll-up"
+}
